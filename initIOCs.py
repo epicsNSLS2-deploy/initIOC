@@ -69,7 +69,7 @@ class IOCAction:
     # Function that updates the unique.cmd file with all of the required configurations
     #
     def update_unique(self, ioc_top, bin_loc, bin_flat, prefix, engineer, hostname, ca_ip):
-        if os.path.existis(ioc_top + "/" + self.ioc_name +"/unique.cmd":
+        if os.path.exists(ioc_top + "/" + self.ioc_name +"/unique.cmd"):
             unique_path = ioc_top + "/" + self.ioc_name +"/unique.cmd"
             unique_old_path = ioc_top +"/" + self.ioc_name +"/unique_OLD.cmd"
             os.rename(unique_path, unique_old_path)
@@ -90,9 +90,9 @@ class IOCAction:
                 elif "HOSTNAME" in line:
                     uq.write('epicsEnvSet("HOSTNAME", "{}")\n'.format(hostname))
                 elif "PREFIX" in line:
-                    uq.write('epicsEnvSet("PREFIX", "{}")\n'.format(prefix + "{{{}}}".format(self.ioc_type[2:] +"-Cam:"+self.ioc_num)))
+                    uq.write('epicsEnvSet("PREFIX", "{}")\n'.format(prefix + "{{{}}}".format(self.ioc_type[2:] +"-Cam:{}".format(self.ioc_num))))
                 elif "CTPREFIX" in line:
-                    uq.write('epicsEnvSet("CTPREFIX", "{}")\n'.format(prefix + "{{{}}}".format(self.ioc_type[2:] +"-Cam:"+self.ioc_num)))
+                    uq.write('epicsEnvSet("CTPREFIX", "{}")\n'.format(prefix + "{{{}}}".format(self.ioc_type[2:] +"-Cam:{}".format(self.ioc_num))))
                 elif "IOCNAME" in line:
                     uq.write('epicsEnvSet("IOCNAME", "{}")\n'.format(ca_ip))
                 elif "EPICS_CA_ADDR_LIST" in line:
@@ -188,6 +188,8 @@ class IOCAction:
         if(os.path.exists(ioc_top + "/" + self.ioc_name + "/cleanup.sh")):
             print("Performing cleanup for {}".format(self.ioc_name))
             out = subprocess.call(["bash", ioc_top + "/" + self.ioc_name + "/cleanup.sh"])
+            if os.path.exists(ioc_top +"/" + self.ioc_name + "/st.cmd"):
+                os.chmod(ioc_top +"/" + self.ioc_name + "/st.cmd", 0o755)
         else:
             print("No cleanup script found, using outdated version of IOC template")
 
