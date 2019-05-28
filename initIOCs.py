@@ -13,6 +13,8 @@ import re
 import subprocess
 
 
+version = "v0.0.1"
+
 #
 # Helper class that stores information and functions for each IOC in the CONFIGURE file
 #
@@ -31,11 +33,14 @@ class IOCAction:
     # The binary for the IOC is also identified and inserted into st.cmd
     #
     def process(self, ioc_top, bin_loc, bin_flat):
-        out = subprocess.call(["git", "clone", "https://github.com/epicsNSLS2-deploy/ioc-template", ioc_top + "/" + self.ioc_name])
+        print("-------------------------------------------")
+        print("Setup process for IOC " + self.ioc_name)
+        print("-------------------------------------------")
+        out = subprocess.call(["git", "clone", "--quiet", "https://github.com/epicsNSLS2-deploy/ioc-template", ioc_top + "/" + self.ioc_name])
         if out != 0:
             print("Error failed to clone IOC template for ioc {}".format(self.ioc_name))
         else:
-            print("Initializing IOC template for " + self.ioc_name)
+            print("IOC template cloned, converting st.cmd")
             ioc_path = ioc_top +"/" + self.ioc_name
             os.remove(ioc_path+"/st.cmd")
 
@@ -70,6 +75,7 @@ class IOCAction:
     #
     def update_unique(self, ioc_top, bin_loc, bin_flat, prefix, engineer, hostname, ca_ip):
         if os.path.exists(ioc_top + "/" + self.ioc_name +"/unique.cmd"):
+            print("Updating unique file based on configuration")
             unique_path = ioc_top + "/" + self.ioc_name +"/unique.cmd"
             unique_old_path = ioc_top +"/" + self.ioc_name +"/unique_OLD.cmd"
             os.rename(unique_path, unique_old_path)
@@ -78,35 +84,40 @@ class IOCAction:
             uq = open(unique_path, "w")
             line = uq_old.readline()
             while line:
-                if "SUPPORT_DIR" in line:
-                    if bin_flat:
-                        uq.write('epicsEnvSet("SUPPORT_DIR", "{}")\n'.format(bin_loc))
+                if not line.startswith('#'):
+                    if "SUPPORT_DIR" in line:
+                        if bin_flat:
+                            uq.write('epicsEnvSet("SUPPORT_DIR", "{}")\n'.format(bin_loc))
+                        else:
+                            uq.write('epicsEnvSet("SUPPORT_DIR", "{}")\n'.format(bin_loc + "/support"))
+                    elif "ENGINEER" in line:
+                        uq.write('epicsEnvSet("ENGINEER", "{}")\n'.format(engineer))
+                    elif "CAM-CONNECT" in line:
+                        uq.write('epicsEnvSet("CAM-CONNECT", "{}")\n'.format(self.connection))
+                    elif "HOSTNAME" in line:
+                        uq.write('epicsEnvSet("HOSTNAME", "{}")\n'.format(hostname))
+                    elif "PREFIX" in line and "CTPREFIX" not in line:
+                        uq.write('epicsEnvSet("PREFIX", "{}")\n'.format(prefix + "{{{}}}".format(self.ioc_type[2:] +"-Cam:{}".format(self.ioc_num))))
+                    elif "CTPREFIX" in line:
+                        uq.write('epicsEnvSet("CTPREFIX", "{}")\n'.format(prefix + "{{{}}}".format(self.ioc_type[2:] +"-Cam:{}".format(self.ioc_num))))
+                    elif "IOCNAME" in line:
+                        uq.write('epicsEnvSet("IOCNAME", "{}")\n'.format(self.ioc_name))
+                    elif "EPICS_CA_ADDR_LIST" in line:
+                        uq.write('epicsEnvSet("EPICS_CA_ADDR_LIST", "{}")\n'.format(ca_ip))
+                    elif "IOC" in line and "IOCNAME" not in line:
+                        uq.write('epicsEnvSet("IOC", "{}")\n'.format("ioc"+self.ioc_type))
+                    elif "PORT" in line:
+                        uq.write('epicsEnvSet("PORT", "{}")\n'.format(self.ioc_type[2:]+"1"))
                     else:
-                        uq.write('epicsEnvSet("SUPPORT_DIR", "{}")\n'.format(bin_loc + "/support"))
-                elif "ENGINEER" in line:
-                    uq.write('epicsEnvSet("ENGINEER", "{}")\n'.format(engineer))
-                elif "CAM-CONNECT" in line:
-                    uq.write('epicsEnvSet("CAM-CONNECT", "{}")\n'.format(self.connection))
-                elif "HOSTNAME" in line:
-                    uq.write('epicsEnvSet("HOSTNAME", "{}")\n'.format(hostname))
-                elif "PREFIX" in line:
-                    uq.write('epicsEnvSet("PREFIX", "{}")\n'.format(prefix + "{{{}}}".format(self.ioc_type[2:] +"-Cam:{}".format(self.ioc_num))))
-                elif "CTPREFIX" in line:
-                    uq.write('epicsEnvSet("CTPREFIX", "{}")\n'.format(prefix + "{{{}}}".format(self.ioc_type[2:] +"-Cam:{}".format(self.ioc_num))))
-                elif "IOCNAME" in line:
-                    uq.write('epicsEnvSet("IOCNAME", "{}")\n'.format(ca_ip))
-                elif "EPICS_CA_ADDR_LIST" in line:
-                    uq.write('epicsEnvSet("EPICS_CA_ADDR_LIST", "{}")\n'.format(ca_ip))
-                elif "IOC" in line and "IOCNAME" not in line:
-                    uq.write('epicsEnvSet("IOC", "{}")\n'.format("ioc"+self.ioc_type))
-                elif "PORT" in line:
-                    uq.write('epicsEnvSet("PORT", "{}")\n'.format(self.ioc_type[2:]+"1"))
+                        uq.write(line)
                 else:
                     uq.write(line)
                 line = uq_old.readline()
 
             uq_old.close()
             uq.close()
+        else:
+            print("No unique file found, proceeding to next step")
 
 
     #
@@ -115,6 +126,7 @@ class IOCAction:
     def update_config(self, ioc_top, hostname):
         conf_path = ioc_top + "/" + self.ioc_name + "/config"
         if os.path.exists(conf_path):
+            print("Updating config file for procServer connection")
             conf_old_path = ioc_top + "/" + self.ioc_name + "/config_OLD"
             os.rename(conf_path, conf_old_path)
             cn_old = open(conf_old_path, "r")
@@ -132,7 +144,8 @@ class IOCAction:
                 line = cn_old.readline()
             cn_old.close()
             cn.close()
-
+        else:
+            print("No config file found moving to next step")
 
     #
     # Function that fixes the envPaths file if binaries are not flat
@@ -147,6 +160,7 @@ class IOCAction:
             line = env_old.readline()
             while line:
                 if "EPICS_BASE" in line and not bin_flat:
+                    print("Fixing base location in envPaths")
                     env.write('epicsEnvSet("EPICS_BASE", "$(SUPPORT)/../base)\n')
                 else:
                     env.write(line)
@@ -190,6 +204,7 @@ class IOCAction:
             out = subprocess.call(["bash", ioc_top + "/" + self.ioc_name + "/cleanup.sh"])
             if os.path.exists(ioc_top +"/" + self.ioc_name + "/st.cmd"):
                 os.chmod(ioc_top +"/" + self.ioc_name + "/st.cmd", 0o755)
+            print()
         else:
             print("No cleanup script found, using outdated version of IOC template")
 
@@ -205,7 +220,7 @@ def read_ioc_config():
     ioc_actions = []
     configuration = {}
     bin_flat = True
-    ioc_num_counter = 0
+    ioc_num_counter = 1
 
     line = ioc_config_file.readline()
     while line:
@@ -239,15 +254,26 @@ def init_ioc_dir(ioc_top):
         exit()
     elif os.path.exists(ioc_top) and os.path.isdir(ioc_top):
         print("IOC Dir already exits.")
+        print()
     else:
         os.mkdir(ioc_top)
 
+
+def print_start_message():
+    print("+----------------------------------------------------------------+")
+    print("+ initIOCs, Version: " + version +"                                      +")
+    print("+ Author: Jakub Wlodek                                           +")
+    print("+ Copyright (c): Brookhaven National Laboratory 2018-2019        +")
+    print("+ This software comes with NO warranty!                          +")
+    print("+----------------------------------------------------------------+")
+    print()
 
 #
 # Main driver function. First calls read_ioc_config, then for each instance of IOCAction
 # perform the process, update_unique, update_config, fix_env_paths, and cleanup functions
 #
 def init_iocs():
+    print_start_message()
     actions, configuration, bin_flat = read_ioc_config()
     init_ioc_dir(configuration["IOC_DIR"])
     for action in actions:
