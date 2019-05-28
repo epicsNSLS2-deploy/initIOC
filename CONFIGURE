@@ -4,8 +4,10 @@
 IOC_DIR=/epics/iocs
 
 # Top Level dir containing compiled binaries.
-TOP_BINARY_DIR=/epics/prod
+TOP_BINARY_DIR=/epics
 
+# If base and support are in differet directories, set to NO, otherwise YES
+BINARIES_FLAT=NO
 
 # Note that IOC type must have 'AD' at the start
 # Currently only IOC Type and IOC Name are used. Other params need to be edited in unique.cmd
