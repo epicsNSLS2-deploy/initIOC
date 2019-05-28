@@ -22,6 +22,7 @@ IOC Port | The telnet port that the IOC will run on when started by procServer
 Cam Connection | A general parameter for whatever connection format the camera uses. Can be serial number, config path, IP etc.
 
 Other configuration options that are found in `CONFIGURE` include:  
+
 Option | Description
 ---------|--------
 IOC_DIR | Location for iocs on the server. Usually `/epics/iocs`
