@@ -7,6 +7,7 @@
 # Created: May 2019
 #
 
+#------------MAIN CONFIGURATION-----------------
 
 # Top Level IOC directory (Where all your IOCs will be located)
 IOC_DIR=/epics/iocs
@@ -19,6 +20,20 @@ TOP_BINARY_DIR=/epics
 # If base and support are in differet directories, set to NO, otherwise YES
 BINARIES_FLAT=NO
 
+
+# Note that IOC type must have 'AD' at the start
+# IOC port will be injected into the config file for procServer
+# Cam Connection is a universal variable that is used to connect to the camera.
+# UVC - Serial or ProductID, Prosilica - IP, etc.
+
+# IOC Type    IOC Name          IOC Port       Cam Connection
+#-------------------------------------------------------------------
+ADUVC         cam-uvc            4000            25344
+ADProsilica   cam-ps1            4001            EX.AM.PLE.IP
+ADAndor3      cam-andor3         4002            /exam/ple/path
+
+
+#------------ADDITIONAL CONFIGURATION-----------------
 
 # User or Engineer responsible for the IOC
 ENGINEER=J. Wlodek
@@ -33,14 +48,5 @@ PREFIX=XF:10IDC-BI
 HOSTNAME=xf10idd-ioc3
 
 
-# Note that IOC type must have 'AD' at the start
-# IOC port will be injected into the config file for procServer
-# Cam Connection is a universal variable that is used to connect to the camera.
-# UVC - Serial or ProductID, Prosilica - IP, etc.
-
-# IOC Type    IOC Name          IOC Port       Cam Connection
-#-------------------------------------------------------------------
-ADUVC         cam-uvc            4000            25344
-ADProsilica   cam-ps1            4001            EX.AM.PLE.IP
-ADAndor3      cam-andor3         4002            /exam/ple/path
-
+# Channel access address list IP
+CA_ADDRESS=10.10.0.255
