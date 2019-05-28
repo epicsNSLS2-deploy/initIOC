@@ -13,6 +13,9 @@ import re
 import subprocess
 
 
+#
+# Helper class that stores information and functions for each IOC in the CONFIGURE file
+#
 class IOCAction:
 
     def __init__(self, ioc_type, ioc_name, ioc_port, connection, ioc_num):
@@ -23,6 +26,10 @@ class IOCAction:
         self.ioc_num = ioc_num
     
 
+    #
+    # Function that clones ioc-template, and pulls correct st.cmd from startupScripts folder
+    # The binary for the IOC is also identified and inserted into st.cmd
+    #
     def process(self, ioc_top, bin_loc, bin_flat):
         out = subprocess.call(["git", "clone", "https://github.com/epicsNSLS2-deploy/ioc-template", ioc_top + "/" + self.ioc_name])
         if out != 0:
@@ -58,6 +65,9 @@ class IOCAction:
             st.close()
     
 
+    #
+    # Function that updates the unique.cmd file with all of the required configurations
+    #
     def update_unique(self, ioc_top, bin_loc, bin_flat, prefix, engineer, hostname, ca_ip):
         if os.path.existis(ioc_top + "/" + self.ioc_name +"/unique.cmd":
             unique_path = ioc_top + "/" + self.ioc_name +"/unique.cmd"
@@ -99,6 +109,9 @@ class IOCAction:
             uq.close()
 
 
+    #
+    # Function that updates the config file with the correct IOC name, port, and hostname
+    #
     def update_config(self, ioc_top, hostname):
         conf_path = ioc_top + "/" + self.ioc_name + "/config"
         if os.path.exists(conf_path):
@@ -121,6 +134,9 @@ class IOCAction:
             cn.close()
 
 
+    #
+    # Function that fixes the envPaths file if binaries are not flat
+    #
     def fix_env_paths(self, ioc_top, bin_flat):
         env_path = ioc_top + "/" + self.ioc_name + "/envPaths"
         if os.path.exists(env_path):
@@ -139,6 +155,9 @@ class IOCAction:
             env.close()
 
 
+    #
+    # Function that identifies the IOC binary location based on its type and the binary structure
+    #
     def getIOCBin(self, bin_loc, bin_flat):
         if bin_flat:
             driver_path = bin_loc + "/areaDetector/" + self.ioc_type
@@ -162,6 +181,9 @@ class IOCAction:
         return driver_path
 
 
+    #
+    # Function that runs the cleanup.sh script in ioc-template to remove unwanted files
+    #
     def cleanup(self, ioc_top):
         if(os.path.exists(ioc_top + "/" + self.ioc_name + "/cleanup.sh")):
             print("Performing cleanup for {}".format(self.ioc_name))
@@ -170,8 +192,12 @@ class IOCAction:
             print("No cleanup script found, using outdated version of IOC template")
 
 
+#----------------MAIN SCRIPT FUNCTIONS------------
 
-
+#
+# Function for reading the CONFIGURE file. Returns a dictionary of configure options,
+# a list of IOCAction instances, and a boolean representing if binaries are flat or not
+#
 def read_ioc_config():
     ioc_config_file = open("CONFIGURE", "r+")
     ioc_actions = []
@@ -202,6 +228,9 @@ def read_ioc_config():
     return ioc_actions, configuration, bin_flat
 
 
+#
+# If the IOC directory does not yet exist, we create it
+#
 def init_ioc_dir(ioc_top):
     if ioc_top == "":
         print("Error: IOC top not initialized")
@@ -212,6 +241,10 @@ def init_ioc_dir(ioc_top):
         os.mkdir(ioc_top)
 
 
+#
+# Main driver function. First calls read_ioc_config, then for each instance of IOCAction
+# perform the process, update_unique, update_config, fix_env_paths, and cleanup functions
+#
 def init_iocs():
     actions, configuration, bin_flat = read_ioc_config()
     init_ioc_dir(configuration["IOC_DIR"])
@@ -225,6 +258,7 @@ def init_iocs():
         action.cleanup(configuration["IOC_DIR"])
 
 
+# Run the script
 init_iocs()
 
 
