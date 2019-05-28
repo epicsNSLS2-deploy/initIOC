@@ -161,7 +161,7 @@ class IOCAction:
             while line:
                 if "EPICS_BASE" in line and not bin_flat:
                     print("Fixing base location in envPaths")
-                    env.write('epicsEnvSet("EPICS_BASE", "$(SUPPORT)/../base)\n')
+                    env.write('epicsEnvSet("EPICS_BASE", "$(SUPPORT)/../base")\n')
                 else:
                     env.write(line)
                 line = env_old.readline()
