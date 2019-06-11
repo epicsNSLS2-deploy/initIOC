@@ -68,6 +68,13 @@ class IOCAction:
 
             example_st.close()
             st.close()
+
+            autosave_path = ioc_path + "/autosaveFiles"
+            autosave_type = self.ioc_type[2:].lower()
+            if os.path.exists(autosave_path + "/" + autosave_type + "_auto_settings.req"):
+                os.rename(autosave_path + "/" + autosave_type + "_auto_settings.req", ioc_path + "/auto_settings.req")
+            else:
+                print("Could not find supported auto_settings.req file for IOC {}.".format(self.ioc_name))
     
 
     #
