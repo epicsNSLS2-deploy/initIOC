@@ -8,19 +8,67 @@
 # Usage instructions can be found in the README.md file in this repo.
 #
 
+# imports
 import os
 import re
 import subprocess
+from sys import platform
 
-
+# version number
 version = "v0.0.1"
 
-#
-# Helper class that stores information and functions for each IOC in the CONFIGURE file
-#
+
 class IOCAction:
+    """
+    Helper class that stores information and functions for each IOC in the CONFIGURE file
+
+    Attributes
+    ----------
+    ioc_type : str
+        name of areaDetector driver instance the IOC is linked to ex. ADProsilica
+    ioc_name : str
+        name of the IOC ex. cam-ps1
+    ioc_port : str
+        telnet port on which procserver will run the IOC
+    connection : str
+        Value used to connect to the device ex. IP, serial num. etc.
+    ioc_num : int
+        Counter that keeps track of which IOC it is
+
+    Methods
+    -------
+    process(ioc_top : str, bin_loc : str, bin_flat : bool)
+        clones ioc-template instance, sets up appropriate st.cmd.
+    update_unique(ioc_top : str, bin_loc : str, bin_flat : bool, prefix : str, engineer : str, hostname : str, ca_ip : str)
+        Updates unique.cmd file with all of the required configuration options
+    update_config(ioc_top : str, hostname : str)
+        updates the config file with appropriate options
+    fix_env_paths(ioc_top: str, bin_flat : bool)
+        fixes the existing envpaths with new locations
+    getIOCbin(bin_loc : str, bin_flat : bool)
+        finds the path to the binary for the IOC based on binary top location
+    cleanup(ioc_top : str)
+        runs cleanup.sh script to remove unwanted files in generated IOC.
+    """
 
     def __init__(self, ioc_type, ioc_name, ioc_port, connection, ioc_num):
+        """
+        Constructor for the IOCAction class
+
+        Parameters
+        ----------
+        ioc_type : str
+        name of areaDetector driver instance the IOC is linked to ex. ADProsilica
+        ioc_name : str
+            name of the IOC ex. cam-ps1
+        ioc_port : str
+            telnet port on which procserver will run the IOC
+        connection : str
+            Value used to connect to the device ex. IP, serial num. etc.
+        ioc_num : int
+            Counter that keeps track of which IOC it is
+        """
+
         self.ioc_type = ioc_type
         self.ioc_name = ioc_name
         self.ioc_port = ioc_port
@@ -33,6 +81,20 @@ class IOCAction:
     # The binary for the IOC is also identified and inserted into st.cmd
     #
     def process(self, ioc_top, bin_loc, bin_flat):
+        """
+        Function that clones ioc-template, and pulls correct st.cmd from startupScripts folder
+        The binary for the IOC is also identified and inserted into st.cmd
+
+        Parameters
+        ----------
+        ioc_top : str
+            Path to the top directory to contain generated IOCs
+        bin_loc : str
+            path to top level of binary distribution
+        bin_flat : bool
+            flag for deciding if binaries are flat or stacked
+        """
+
         print("-------------------------------------------")
         print("Setup process for IOC " + self.ioc_name)
         print("-------------------------------------------")
@@ -72,15 +134,34 @@ class IOCAction:
             autosave_path = ioc_path + "/autosaveFiles"
             autosave_type = self.ioc_type[2:].lower()
             if os.path.exists(autosave_path + "/" + autosave_type + "_auto_settings.req"):
+                print("Generating auto_settings.req file for IOC {}.".format(self.ioc_name))
                 os.rename(autosave_path + "/" + autosave_type + "_auto_settings.req", ioc_path + "/auto_settings.req")
             else:
                 print("Could not find supported auto_settings.req file for IOC {}.".format(self.ioc_name))
     
 
-    #
-    # Function that updates the unique.cmd file with all of the required configurations
-    #
     def update_unique(self, ioc_top, bin_loc, bin_flat, prefix, engineer, hostname, ca_ip):
+        """
+        Function that updates the unique.cmd file with all of the required configurations
+
+        Parameters
+        ----------
+        ioc_top : str
+            Path to the top directory to contain generated IOCs
+        bin_loc : str
+            path to top level of binary distribution
+        bin_flat : bool
+            flag for deciding if binaries are flat or stacked
+        prefix : str
+            Prefix given to the IOC
+        engineer : str
+            Name of the engineer deploying the IOC
+        hostname : str
+            name of the host IOC server on which the IOC will run
+        ca_ip : str
+            Channel Access IP address
+        """
+
         if os.path.exists(ioc_top + "/" + self.ioc_name +"/unique.cmd"):
             print("Updating unique file based on configuration")
             unique_path = ioc_top + "/" + self.ioc_name +"/unique.cmd"
@@ -127,10 +208,18 @@ class IOCAction:
             print("No unique file found, proceeding to next step")
 
 
-    #
-    # Function that updates the config file with the correct IOC name, port, and hostname
-    #
     def update_config(self, ioc_top, hostname):
+        """
+        Function that updates the config file with the correct IOC name, port, and hostname
+
+        Parameters
+        ----------
+        ioc_top : str
+            Path to the top directory to contain generated IOCs
+        hostname : str
+            name of the host IOC server on which the IOC will run
+        """
+
         conf_path = ioc_top + "/" + self.ioc_name + "/config"
         if os.path.exists(conf_path):
             print("Updating config file for procServer connection")
@@ -154,10 +243,19 @@ class IOCAction:
         else:
             print("No config file found moving to next step")
 
-    #
-    # Function that fixes the envPaths file if binaries are not flat
-    #
+
     def fix_env_paths(self, ioc_top, bin_flat):
+        """
+        Function that fixes the envPaths file if binaries are not flat
+
+        Parameters
+        ----------
+        ioc_top : str
+            Path to the top directory to contain generated IOCs
+        bin_flat : bool
+            flag for deciding if binaries are flat or stacked
+        """
+
         env_path = ioc_top + "/" + self.ioc_name + "/envPaths"
         if os.path.exists(env_path):
             env_old_path = ioc_top + "/" + self.ioc_name + "/envPaths_OLD"
@@ -176,22 +274,39 @@ class IOCAction:
             env.close()
 
 
-    #
-    # Function that identifies the IOC binary location based on its type and the binary structure
-    #
     def getIOCBin(self, bin_loc, bin_flat):
+        """
+        Function that identifies the IOC binary location based on its type and the binary structure
+
+        Parameters
+        ----------
+        bin_loc : str
+            path to top level of binary distribution
+        bin_flat : bool
+            flag for deciding if binaries are flat or stacked
+        
+        Return
+        ------
+        driver_path : str
+            Path to the IOC executable located in driverName/iocs/IOC/bin/OS/driverApp
+        """
+
         if bin_flat:
+            # if flat, there is no suppor directory
             driver_path = bin_loc + "/areaDetector/" + self.ioc_type
         else:
             driver_path = bin_loc + "/support/areaDetector/" + self.ioc_type
+        # identify the IOCs folder
         for name in os.listdir(driver_path):
             if "ioc" == name or "iocs" == name:
                 driver_path = driver_path + "/" + name
                 break
+        # identify the IOC 
         for name in os.listdir(driver_path):
             if "IOC" in name or "ioc" in name:
                 driver_path = driver_path + "/" + name
                 break 
+        # Find the bin folder
         driver_path = driver_path + "/bin"
         for name in os.listdir(driver_path):
             driver_path = driver_path + "/" + name
@@ -202,27 +317,49 @@ class IOCAction:
         return driver_path
 
 
-    #
-    # Function that runs the cleanup.sh script in ioc-template to remove unwanted files
-    #
     def cleanup(self, ioc_top):
-        if(os.path.exists(ioc_top + "/" + self.ioc_name + "/cleanup.sh")):
-            print("Performing cleanup for {}".format(self.ioc_name))
-            out = subprocess.call(["bash", ioc_top + "/" + self.ioc_name + "/cleanup.sh"])
-            if os.path.exists(ioc_top +"/" + self.ioc_name + "/st.cmd"):
-                os.chmod(ioc_top +"/" + self.ioc_name + "/st.cmd", 0o755)
-            print()
-        else:
+        """ Function that runs the cleanup.sh script in ioc-template to remove unwanted files """
+
+        cleanup_completed = False
+
+        if platform == "linux":
+            if(os.path.exists(ioc_top + "/" + self.ioc_name + "/cleanup.sh")):
+                print("Performing cleanup for {}".format(self.ioc_name))
+                out = subprocess.call(["bash", ioc_top + "/" + self.ioc_name + "/cleanup.sh"])
+                print()
+                cleanup_completed = True
+        elif platform == "win32":
+            if(os.path.exists(ioc_top + "/" + self.ioc_name + "/cleanup.bat")):
+                print("Performing cleanup for {}".format(self.ioc_name))
+                out = subprocess.call([ioc_top + "/" + self.ioc_name + "/cleanup.bat"])
+                print()
+                cleanup_completed = True
+        if os.path.exists(ioc_top +"/" + self.ioc_name + "/st.cmd"):
+            os.chmod(ioc_top +"/" + self.ioc_name + "/st.cmd", 0o755)
+        if not cleanup_completed:
             print("No cleanup script found, using outdated version of IOC template")
 
 
+#-------------------------------------------------
 #----------------MAIN SCRIPT FUNCTIONS------------
+#-------------------------------------------------
 
-#
-# Function for reading the CONFIGURE file. Returns a dictionary of configure options,
-# a list of IOCAction instances, and a boolean representing if binaries are flat or not
-#
+
 def read_ioc_config():
+    """
+    Function for reading the CONFIGURE file. Returns a dictionary of configure options,
+    a list of IOCAction instances, and a boolean representing if binaries are flat or not
+
+    Returns
+    -------
+    ioc_actions : List of IOCAction
+        list of IOC actions that need to be performed.
+    configuration : dict of str -> str
+        Dictionary containing all options read from configure
+    bin_flat : bool
+        toggle for flat or stacked binary directory structure
+    """
+
     ioc_config_file = open("CONFIGURE", "r+")
     ioc_actions = []
     configuration = {}
@@ -252,10 +389,16 @@ def read_ioc_config():
     return ioc_actions, configuration, bin_flat
 
 
-#
-# If the IOC directory does not yet exist, we create it
-#
 def init_ioc_dir(ioc_top):
+    """
+    Function that creates ioc directory if it has not already been created.
+
+    Parameters
+    ----------
+    ioc_top : str
+        Path to the top directory to contain generated IOCs
+    """
+
     if ioc_top == "":
         print("Error: IOC top not initialized")
         exit()
@@ -267,6 +410,10 @@ def init_ioc_dir(ioc_top):
 
 
 def print_start_message():
+    """
+    Function for printing initial message
+    """
+
     print("+----------------------------------------------------------------+")
     print("+ initIOCs, Version: " + version +"                                      +")
     print("+ Author: Jakub Wlodek                                           +")
@@ -275,11 +422,13 @@ def print_start_message():
     print("+----------------------------------------------------------------+")
     print()
 
-#
-# Main driver function. First calls read_ioc_config, then for each instance of IOCAction
-# perform the process, update_unique, update_config, fix_env_paths, and cleanup functions
-#
+
 def init_iocs():
+    """
+    Main driver function. First calls read_ioc_config, then for each instance of IOCAction
+    perform the process, update_unique, update_config, fix_env_paths, and cleanup functions
+    """
+
     print_start_message()
     actions, configuration, bin_flat = read_ioc_config()
     init_ioc_dir(configuration["IOC_DIR"])
