@@ -10,11 +10,11 @@
 #------------MAIN CONFIGURATION-----------------
 
 # Top Level IOC directory (Where all your IOCs will be located)
-IOC_DIR=/epics/iocs
+IOC_DIR=/home/jwlodek/Documents/epics/iocs
 
 
 # Top Level dir containing compiled binaries.
-TOP_BINARY_DIR=/home/jwlodek/Documents/isa_test
+TOP_BINARY_DIR=/home/jwlodek/Documents/epics/src
 
 
 # If base and support are in differet directories, set to NO, otherwise YES
@@ -28,7 +28,10 @@ BINARIES_FLAT=NO
 
 # IOC Type    IOC Name          IOC Port       Cam Connection
 #-------------------------------------------------------------------
-ADUVC         cam-uvc1            4000            25344
+ADUVC         cam-uvc2             4002            49240
+ADUVC         cam-uvc3             4003            49490
+#ADProsilica   cam-ps1            4001            EX.AM.PLE.IP
+#ADAndor3      cam-andor3         4002            /exam/ple/path
 
 
 #------------ADDITIONAL CONFIGURATION-----------------
