@@ -139,11 +139,11 @@ class IOCAction:
             else:
                 print("Could not find supported auto_settings.req file for IOC {}.".format(self.ioc_name))
 
-            if os.path.exists(ioc_path + "/dependencyFiles"):
-                for file in os.listdir(ioc_path + "/dependencyFiles"):
+            if os.path.exists(ioc_path + "/dependancyFiles"):
+                for file in os.listdir(ioc_path + "/dependancyFiles"):
                     if startup_type in file.lower():
                         print('Copying dependency file {} for {}'.format(file, self.ioc_type))
-                        os.rename(ioc_path + "/dependencyFiles/" + file, ioc_path + "/" + file)
+                        os.rename(ioc_path + "/dependancyFiles/" + file, ioc_path + "/" + file)
     
 
     def update_unique(self, ioc_top, bin_loc, bin_flat, prefix, engineer, hostname, ca_ip):
