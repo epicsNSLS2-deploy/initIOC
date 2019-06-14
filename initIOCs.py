@@ -139,7 +139,7 @@ class IOCAction:
             else:
                 print("Could not find supported auto_settings.req file for IOC {}.".format(self.ioc_name))
 
-            if os.path.exists(ioc_path + "/dependencyFiles")
+            if os.path.exists(ioc_path + "/dependencyFiles"):
                 for file in os.listdir(ioc_path + "/dependencyFiles"):
                     if startup_type in file.lower():
                         print('Copying dependency file {} for {}'.format(file, self.ioc_type))
