@@ -15,7 +15,7 @@ import subprocess
 from sys import platform
 
 # version number
-version = "v0.0.1"
+version = "v0.0.2"
 
 
 class IOCAction:
@@ -101,6 +101,7 @@ class IOCAction:
         out = subprocess.call(["git", "clone", "--quiet", "https://github.com/epicsNSLS2-deploy/ioc-template", ioc_top + "/" + self.ioc_name])
         if out != 0:
             print("Error failed to clone IOC template for ioc {}".format(self.ioc_name))
+            return -1
         else:
             print("IOC template cloned, converting st.cmd")
             ioc_path = ioc_top +"/" + self.ioc_name
@@ -109,10 +110,17 @@ class IOCAction:
             startup_path = ioc_path+"/startupScripts"
             startup_type = self.ioc_type[2:].lower()
 
+            found = False
+
             for file in os.listdir(ioc_path +"/startupScripts"):
                 if startup_type in file.lower():
                     startup_path = startup_path + "/" + file
+                    found = True
                     break
+            if not found:
+                print('ERROR - {} is not yet supported by initIOCs, skipping'.format(self.ioc_type))
+                return -1
+            
             example_st = open(startup_path, "r+")
             st = open(ioc_path+"/st.cmd", "w+")
 
@@ -144,7 +152,8 @@ class IOCAction:
                     if startup_type in file.lower():
                         print('Copying dependency file {} for {}'.format(file, self.ioc_type))
                         os.rename(ioc_path + "/dependancyFiles/" + file, ioc_path + "/" + file)
-    
+
+            return 0
 
     def update_unique(self, ioc_top, bin_loc, bin_flat, prefix, engineer, hostname, ca_ip):
         """
@@ -318,8 +327,10 @@ class IOCAction:
             driver_path = driver_path + "/" + name
             break
         for name in os.listdir(driver_path):
-            driver_path = driver_path + "/" + name
-            break
+            if 'App' in name:
+                driver_path = driver_path + "/" + name
+                break
+
         return driver_path
 
 
@@ -439,13 +450,14 @@ def init_iocs():
     actions, configuration, bin_flat = read_ioc_config()
     init_ioc_dir(configuration["IOC_DIR"])
     for action in actions:
-        action.process(configuration["IOC_DIR"], configuration["TOP_BINARY_DIR"], bin_flat)
-        action.update_unique(configuration["IOC_DIR"], configuration["TOP_BINARY_DIR"], bin_flat, 
-            configuration["PREFIX"], configuration["ENGINEER"], configuration["HOSTNAME"], 
-            configuration["CA_ADDRESS"])
-        action.update_config(configuration["IOC_DIR"], configuration["HOSTNAME"])
-        action.fix_env_paths(configuration["IOC_DIR"], bin_flat)
-        action.cleanup(configuration["IOC_DIR"])
+        out = action.process(configuration["IOC_DIR"], configuration["TOP_BINARY_DIR"], bin_flat)
+        if out == 0:
+            action.update_unique(configuration["IOC_DIR"], configuration["TOP_BINARY_DIR"], bin_flat, 
+                configuration["PREFIX"], configuration["ENGINEER"], configuration["HOSTNAME"], 
+                configuration["CA_ADDRESS"])
+            action.update_config(configuration["IOC_DIR"], configuration["HOSTNAME"])
+            action.fix_env_paths(configuration["IOC_DIR"], bin_flat)
+            action.cleanup(configuration["IOC_DIR"])
 
 
 # Run the script
