@@ -76,10 +76,6 @@ class IOCAction:
         self.ioc_num = ioc_num
     
 
-    #
-    # Function that clones ioc-template, and pulls correct st.cmd from startupScripts folder
-    # The binary for the IOC is also identified and inserted into st.cmd
-    #
     def process(self, ioc_top, bin_loc, bin_flat):
         """
         Function that clones ioc-template, and pulls correct st.cmd from startupScripts folder
@@ -93,6 +89,11 @@ class IOCAction:
             path to top level of binary distribution
         bin_flat : bool
             flag for deciding if binaries are flat or stacked
+
+        Returns
+        -------
+        int
+            -1 if error, 0 if success
         """
 
         print("-------------------------------------------")
@@ -154,6 +155,7 @@ class IOCAction:
                         os.rename(ioc_path + "/dependancyFiles/" + file, ioc_path + "/" + file)
 
             return 0
+
 
     def update_unique(self, ioc_top, bin_loc, bin_flat, prefix, engineer, hostname, ca_ip):
         """
@@ -307,7 +309,7 @@ class IOCAction:
         """
 
         if bin_flat:
-            # if flat, there is no suppor directory
+            # if flat, there is no support directory
             driver_path = bin_loc + "/areaDetector/" + self.ioc_type
         else:
             driver_path = bin_loc + "/support/areaDetector/" + self.ioc_type
@@ -323,9 +325,11 @@ class IOCAction:
                 break 
         # Find the bin folder
         driver_path = driver_path + "/bin"
+        # There should only be one architecture
         for name in os.listdir(driver_path):
             driver_path = driver_path + "/" + name
             break
+        # We look for the executable that ends with App
         for name in os.listdir(driver_path):
             if 'App' in name:
                 driver_path = driver_path + "/" + name
@@ -335,7 +339,7 @@ class IOCAction:
 
 
     def cleanup(self, ioc_top):
-        """ Function that runs the cleanup.sh script in ioc-template to remove unwanted files """
+        """ Function that runs the cleanup.sh/cleanup.bat script in ioc-template to remove unwanted files """
 
         cleanup_completed = False
 
