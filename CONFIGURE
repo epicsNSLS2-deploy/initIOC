@@ -14,11 +14,11 @@ IOC_DIR=/epics/iocs
 
 
 # Top Level dir containing compiled binaries.
-TOP_BINARY_DIR=/epics
+TOP_BINARY_DIR=/ad-nfs/epics/prod/Deb8/production
 
 
 # If base and support are in differet directories, set to NO, otherwise YES
-BINARIES_FLAT=NO
+BINARIES_FLAT=YES
 
 
 # Note that IOC type must have 'AD' at the start
@@ -28,9 +28,9 @@ BINARIES_FLAT=NO
 
 # IOC Type    IOC Name          IOC Port       Cam Connection
 #-------------------------------------------------------------------
-ADUVC         cam-uvc            4000            25344
-ADProsilica   cam-ps1            4001            EX.AM.PLE.IP
-ADAndor3      cam-andor3         4002            /exam/ple/path
+ADUVC         cam-uvc2             4002            49240
+#ADProsilica   cam-ps1            4001            EX.AM.PLE.IP
+#ADAndor3      cam-andor3         4002            /exam/ple/path
 
 
 #------------ADDITIONAL CONFIGURATION-----------------

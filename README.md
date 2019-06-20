@@ -1,10 +1,10 @@
 # initIOC
 
-Script for generating camera IOCs from the ioc-template.
+Script for generating camera IOCs from the [ioc-template](https://github.com/epicsNSLS2-deploy/ioc-template).
 
 ### Usage
 
-This script is intended for rapidly initializing IOCs for new detector en-mass. To use the script, you will need to edit the `CONFIGURE` file in this directory. Within this file there is a table with several example IOCs included.
+This script is intended for rapidly initializing IOCs for new detectors en-mass. To use the script, you will need to edit the `CONFIGURE` file in this directory. Within this file there is a table with several example IOCs included.
 ```
 # IOC Type    IOC Name          IOC Port       Cam Connection
 #-------------------------------------------------------------------
@@ -46,3 +46,8 @@ initIOCs.py relies on [ioc-template](https://github.com/epicsNSLS2-deploy/ioc-te
 * ADLambda
 * ADUVC
 * ADProsilica
+* ADPilatus
+* ADPerkinElmer
+* ADMerlin
+* ADSpinnaker
+* ADPointGrey
