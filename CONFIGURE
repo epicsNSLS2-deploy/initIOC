@@ -10,15 +10,15 @@
 #------------MAIN CONFIGURATION-----------------
 
 # Top Level IOC directory (Where all your IOCs will be located)
-IOC_DIR=/epics/iocs
+IOC_DIR=/home/jwlodek/Documents/epics/iocs
 
 
 # Top Level dir containing compiled binaries.
-TOP_BINARY_DIR=/ad-nfs/epics/prod/Deb8/production
+TOP_BINARY_DIR=/home/jwlodek/Documents/epics/src/support
 
 
 # If base and support are in differet directories, set to NO, otherwise YES
-BINARIES_FLAT=YES
+BINARIES_FLAT=NO
 
 
 # Note that IOC type must have 'AD' at the start
@@ -26,11 +26,14 @@ BINARIES_FLAT=YES
 # Cam Connection is a universal variable that is used to connect to the camera.
 # UVC - Serial or ProductID, Prosilica - IP, etc.
 
-# IOC Type    IOC Name          IOC Port       Cam Connection
-#-------------------------------------------------------------------
-ADUVC         cam-uvc2             4002            49240
-#ADProsilica   cam-ps1            4001            EX.AM.PLE.IP
-#ADAndor3      cam-andor3         4002            /exam/ple/path
+# IOC Type    IOC Name        Asyn Port      IOC Port      Cam Connection
+#-------------------------------------------------------------------------
+ADSimDetector  cam-sim1         SIM1           4000              NA
+ADSimDetector  cam-sim2         SIM1           4001              NA
+ADSimDetector  cam-sim3         SIM1           4002              NA
+#ADUVC         cam-uvc3         UVC1           4003             49490
+#ADProsilica   cam-ps1          PS1            4001          EX.AM.PLE.IP
+#ADAndor3      cam-andor3       AD3            4002          /exam/ple/path
 
 
 #------------ADDITIONAL CONFIGURATION-----------------
@@ -41,12 +44,12 @@ ENGINEER=J. Wlodek
 
 # All Camera PVs will be $Prefix{$(IOC Type)-Cam:#}
 # Ex: XF:10IDC-BI{UVC-Cam:2}
-PREFIX=XF:10IDC-BI
+PREFIX=10:SIM1
 
 
 # Name of IOC host server (added to config file)
-HOSTNAME=xf10idd-ioc3
+HOSTNAME=localhost
 
 
 # Channel access address list IP
-CA_ADDRESS=10.10.0.255
+CA_ADDRESS=127.0.0.255

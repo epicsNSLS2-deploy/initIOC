@@ -51,7 +51,7 @@ class IOCAction:
         runs cleanup.sh script to remove unwanted files in generated IOC.
     """
 
-    def __init__(self, ioc_type, ioc_name, ioc_port, connection, ioc_num):
+    def __init__(self, ioc_type, ioc_name, asyn_port, ioc_port, connection, ioc_num):
         """
         Constructor for the IOCAction class
 
@@ -69,11 +69,12 @@ class IOCAction:
             Counter that keeps track of which IOC it is
         """
 
-        self.ioc_type = ioc_type
-        self.ioc_name = ioc_name
-        self.ioc_port = ioc_port
+        self.ioc_type   = ioc_type
+        self.ioc_name   = ioc_name
+        self.asyn_port  = asyn_port
+        self.ioc_port   = ioc_port
         self.connection = connection
-        self.ioc_num = ioc_num
+        self.ioc_num    = ioc_num
     
 
     def process(self, ioc_top, bin_loc, bin_flat):
@@ -99,6 +100,9 @@ class IOCAction:
         print("-------------------------------------------")
         print("Setup process for IOC " + self.ioc_name)
         print("-------------------------------------------")
+        if os.path.exists(ioc_top + '/' + self.ioc_name):
+            print('ERROR - IOC with name {} already exists.'.format(self.ioc_name))
+            return
         out = subprocess.call(["git", "clone", "--quiet", "https://github.com/epicsNSLS2-deploy/ioc-template", ioc_top + "/" + self.ioc_name])
         if out != 0:
             print("Error failed to clone IOC template for ioc {}".format(self.ioc_name))
@@ -212,7 +216,7 @@ class IOCAction:
                     elif "IOC" in line and "IOCNAME" not in line:
                         uq.write('epicsEnvSet("IOC", "{}")\n'.format("ioc"+self.ioc_type))
                     elif "PORT" in line:
-                        uq.write('epicsEnvSet("PORT", "{}")\n'.format(self.ioc_type[2:]+"1"))
+                        uq.write('epicsEnvSet("PORT", "{}")\n'.format(self.asyn_port))
                     else:
                         uq.write(line)
                 else:
@@ -308,34 +312,36 @@ class IOCAction:
             Path to the IOC executable located in driverName/iocs/IOC/bin/OS/driverApp
         """
 
-        if bin_flat:
-            # if flat, there is no support directory
-            driver_path = bin_loc + "/areaDetector/" + self.ioc_type
-        else:
-            driver_path = bin_loc + "/support/areaDetector/" + self.ioc_type
-        # identify the IOCs folder
-        for name in os.listdir(driver_path):
-            if "ioc" == name or "iocs" == name:
+        try:
+            if bin_flat:
+                # if flat, there is no support directory
+                driver_path = bin_loc + "/areaDetector/" + self.ioc_type
+            else:
+                driver_path = bin_loc + "/support/areaDetector/" + self.ioc_type
+            # identify the IOCs folder
+            for name in os.listdir(driver_path):
+                if "ioc" == name or "iocs" == name:
+                    driver_path = driver_path + "/" + name
+                    break
+            # identify the IOC 
+            for name in os.listdir(driver_path):
+                if "IOC" in name or "ioc" in name:
+                    driver_path = driver_path + "/" + name
+                    break 
+            # Find the bin folder
+            driver_path = driver_path + "/bin"
+            # There should only be one architecture
+            for name in os.listdir(driver_path):
                 driver_path = driver_path + "/" + name
                 break
-        # identify the IOC 
-        for name in os.listdir(driver_path):
-            if "IOC" in name or "ioc" in name:
-                driver_path = driver_path + "/" + name
-                break 
-        # Find the bin folder
-        driver_path = driver_path + "/bin"
-        # There should only be one architecture
-        for name in os.listdir(driver_path):
-            driver_path = driver_path + "/" + name
-            break
-        # We look for the executable that ends with App
-        for name in os.listdir(driver_path):
-            if 'App' in name:
-                driver_path = driver_path + "/" + name
-                break
+            # We look for the executable that ends with App
+            for name in os.listdir(driver_path):
+                if 'App' in name:
+                    driver_path = driver_path + "/" + name
+                    break
 
-        return driver_path
+            return driver_path
+        except F
 
 
     def cleanup(self, ioc_top):
@@ -400,7 +406,7 @@ def read_ioc_config():
             line = line.strip()
             line = re.sub(' +', ' ', line)
             temp = line.split(' ')
-            ioc_action = IOCAction(temp[0], temp[1], temp[2], temp[3], ioc_num_counter)
+            ioc_action = IOCAction(temp[0], temp[1], temp[2], temp[3], temp[4], ioc_num_counter)
             ioc_num_counter = ioc_num_counter + 1
             ioc_actions.append(ioc_action)
 
