@@ -102,7 +102,7 @@ class IOCAction:
         print("-------------------------------------------")
         if os.path.exists(ioc_top + '/' + self.ioc_name):
             print('ERROR - IOC with name {} already exists.'.format(self.ioc_name))
-            return
+            return -1
         out = subprocess.call(["git", "clone", "--quiet", "https://github.com/epicsNSLS2-deploy/ioc-template", ioc_top + "/" + self.ioc_name])
         if out != 0:
             print("Error failed to clone IOC template for ioc {}".format(self.ioc_name))
@@ -133,7 +133,11 @@ class IOCAction:
 
             while line:
                 if "#!" in line:
-                    st.write("#!" + self.getIOCBin(bin_loc, bin_flat) + "\n")
+                    binary_path =  self.getIOCBin(bin_loc, bin_flat) 
+                    if binary_path is None:
+                        print('ERROR - Could not identify a compiled IOC binary for {}, skipping'.format(self.ioc_type))
+                        return -1
+                    st.write("#!" + binary_path + "\n")
                 elif "envPaths" in line:
                     st.write("< envPaths\n")
                 else:
@@ -341,7 +345,8 @@ class IOCAction:
                     break
 
             return driver_path
-        except F
+        except FileNotFoundError:
+            return None
 
 
     def cleanup(self, ioc_top):
