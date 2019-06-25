@@ -15,7 +15,7 @@ import subprocess
 from sys import platform
 
 # version number
-version = "v0.0.2"
+version = "v0.0.3"
 
 
 class IOCAction:
@@ -51,7 +51,7 @@ class IOCAction:
         runs cleanup.sh script to remove unwanted files in generated IOC.
     """
 
-    def __init__(self, ioc_type, ioc_name, asyn_port, ioc_port, connection, ioc_num):
+    def __init__(self, ioc_type, ioc_name, ioc_prefix, asyn_port, ioc_port, connection, ioc_num):
         """
         Constructor for the IOCAction class
 
@@ -71,6 +71,7 @@ class IOCAction:
 
         self.ioc_type   = ioc_type
         self.ioc_name   = ioc_name
+        self.ioc_prefix = ioc_prefix
         self.asyn_port  = asyn_port
         self.ioc_port   = ioc_port
         self.connection = connection
@@ -161,6 +162,7 @@ class IOCAction:
                     if startup_type in file.lower():
                         print('Copying dependency file {} for {}'.format(file, self.ioc_type))
                         os.rename(ioc_path + "/dependancyFiles/" + file, ioc_path + "/" + file)
+                        self.fix_macros(ioc_path + '/' + file)
 
             return 0
 
@@ -349,6 +351,28 @@ class IOCAction:
             return None
 
 
+    def fix_macros(self, file_path):
+        """
+        Function that replaces certain macros in given filepath
+
+        Parameters
+        ----------
+        file_path : str
+            path to the target file
+        """
+
+        os.rename(file_path, file_path + '_OLD')
+        old = open(file_path+'_OLD', 'r')
+        contents = old.read()
+        contents = contents.replace('$(PREFIX)', self.ioc_prefix)
+        contents = contents.replace('$(PORT)', self.asyn_port)
+        new = open(file_path, 'w')
+        new.write(contents)
+        old.close()
+        new.close()
+        os.remove(file_path+'_OLD')
+
+
     def cleanup(self, ioc_top):
         """ Function that runs the cleanup.sh/cleanup.bat script in ioc-template to remove unwanted files """
 
@@ -411,7 +435,7 @@ def read_ioc_config():
             line = line.strip()
             line = re.sub(' +', ' ', line)
             temp = line.split(' ')
-            ioc_action = IOCAction(temp[0], temp[1], temp[2], temp[3], temp[4], ioc_num_counter)
+            ioc_action = IOCAction(temp[0], temp[1], configuration['PREFIX'], temp[2], temp[3], temp[4], ioc_num_counter)
             ioc_num_counter = ioc_num_counter + 1
             ioc_actions.append(ioc_action)
 
