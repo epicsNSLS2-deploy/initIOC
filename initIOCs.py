@@ -17,6 +17,19 @@ from sys import platform
 # version number
 version = "v0.0.3"
 
+supported_drivers = {
+    'ADProsilica',
+    'ADUVC',
+    'ADPointGrey',
+    'ADLambda',
+    'ADSimDetector',
+    'ADMerlin',
+    'ADPerkinElmer',
+    'ADPilatus',
+    'ADSpinnaker',
+    'ADAndor3'
+}
+
 
 class IOCAction:
     """
@@ -479,6 +492,16 @@ def print_start_message():
     print()
 
 
+def print_supported_drivers():
+    """ Function that prints list of supported drivers """
+
+    print('Supported Drivers:')
+    print("+-----------------------------+")
+    for driver in supported_drivers:
+        print('+ {}'.format(driver))
+    print()
+
+
 def init_iocs():
     """
     Main driver function. First calls read_ioc_config, then for each instance of IOCAction
@@ -489,14 +512,20 @@ def init_iocs():
     actions, configuration, bin_flat = read_ioc_config()
     init_ioc_dir(configuration["IOC_DIR"])
     for action in actions:
-        out = action.process(configuration["IOC_DIR"], configuration["TOP_BINARY_DIR"], bin_flat)
-        if out == 0:
-            action.update_unique(configuration["IOC_DIR"], configuration["TOP_BINARY_DIR"], bin_flat, 
-                configuration["PREFIX"], configuration["ENGINEER"], configuration["HOSTNAME"], 
-                configuration["CA_ADDRESS"])
-            action.update_config(configuration["IOC_DIR"], configuration["HOSTNAME"])
-            action.fix_env_paths(configuration["IOC_DIR"], bin_flat)
-            action.cleanup(configuration["IOC_DIR"])
+        if action.ioc_type not in supported_drivers:
+            print('ERROR - {} is not currently a supported driver!'.format(action.ioc_type))
+            print_supported_drivers()
+            print('To request support for {} to be added to initIOC, please create an issue on:'.format(action.ioc_type))
+            print('https://github.com/epicsNSLS2-deploy/initIOC/issues')
+        else:
+            out = action.process(configuration["IOC_DIR"], configuration["TOP_BINARY_DIR"], bin_flat)
+            if out == 0:
+                action.update_unique(configuration["IOC_DIR"], configuration["TOP_BINARY_DIR"], bin_flat, 
+                    configuration["PREFIX"], configuration["ENGINEER"], configuration["HOSTNAME"], 
+                    configuration["CA_ADDRESS"])
+                action.update_config(configuration["IOC_DIR"], configuration["HOSTNAME"])
+                action.fix_env_paths(configuration["IOC_DIR"], bin_flat)
+                action.cleanup(configuration["IOC_DIR"])
 
 
 # Run the script
