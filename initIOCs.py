@@ -1,12 +1,13 @@
 #!/usr/bin/python3
 
-# script for auto initialization of IOCs from CONFIGURE file
-#
-# Author: Jakub Wlodek
-#
-# This script was taken from the installSynApps set of scripts.
-# Usage instructions can be found in the README.md file in this repo.
-#
+"""
+Script for auto initialization of IOCs from CONFIGURE file.
+
+This script was taken from the installSynApps set of scripts.
+Usage instructions can be found in the README.md file in this repo.
+
+Author: Jakub Wlodek
+"""
 
 # imports
 import os
