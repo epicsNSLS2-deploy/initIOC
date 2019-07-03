@@ -305,9 +305,9 @@ class IOCAction:
             while line:
                 if line.startswith('epicsEnvSet("ARCH",'):
                     if platform == 'linux':
-                        env.write('epicsEnvSet("ARCH",       "linux-x86_64")')
+                        env.write('epicsEnvSet("ARCH",       "linux-x86_64")\n')
                     elif platform == 'win32':
-                        env.write('epicsEnvSet("ARCH",       "windows-x64-static")')
+                        env.write('epicsEnvSet("ARCH",       "windows-x64-static")\n')
                 elif "EPICS_BASE" in line and not bin_flat:
                     print("Fixing base location in envPaths")
                     env.write('epicsEnvSet("EPICS_BASE", "$(SUPPORT)/../base")\n')
@@ -450,6 +450,7 @@ def read_ioc_config():
                 bin_flat = False
         elif not line.startswith('#') and len(line) > 1:
             line = line.strip()
+            line = re.sub('\t', ' ', line)
             line = re.sub(' +', ' ', line)
             temp = line.split(' ')
             ioc_action = IOCAction(temp[0], temp[1], configuration['PREFIX'], temp[2], temp[3], temp[4], ioc_num_counter)
