@@ -15,7 +15,7 @@ import subprocess
 from sys import platform
 
 # version number
-version = "v0.0.3"
+version = "v0.0.4"
 
 
 class IOCAction:
@@ -128,17 +128,29 @@ class IOCAction:
                 return -1
             
             example_st = open(startup_path, "r+")
-            st = open(ioc_path+"/st.cmd", "w+")
+            if platform == 'linux':
+                st = open(ioc_path+"/st.cmd", "w+")
+            elif platform =='win32':
+                st_exe = open(ioc_path+'/st.cmd', 'w+')
+                binary_path =  self.getIOCBin(bin_loc, bin_flat)
+                if binary_path is None:
+                    print('ERROR - Could not identify a compiled IOC binary for {}, skipping'.format(self.ioc_type))
+                    return -1
+                else:
+                    st_exe.write(binary_path+' st_base.cmd\n')
+                st_exe.close()
+                st = open(ioc_path+"/st_base.cmd", "w+")
 
             line = example_st.readline()
 
             while line:
                 if "#!" in line:
-                    binary_path =  self.getIOCBin(bin_loc, bin_flat) 
-                    if binary_path is None:
-                        print('ERROR - Could not identify a compiled IOC binary for {}, skipping'.format(self.ioc_type))
-                        return -1
-                    st.write("#!" + binary_path + "\n")
+                    if platform == 'linux':
+                        binary_path =  self.getIOCBin(bin_loc, bin_flat) 
+                        if binary_path is None:
+                            print('ERROR - Could not identify a compiled IOC binary for {}, skipping'.format(self.ioc_type))
+                            return -1
+                        st.write("#!" + binary_path + "\n")
                 elif "envPaths" in line:
                     st.write("< envPaths\n")
                 else:
@@ -291,7 +303,12 @@ class IOCAction:
             env = open(env_path, "w")
             line = env_old.readline()
             while line:
-                if "EPICS_BASE" in line and not bin_flat:
+                if line.startswith('epicsEnvSet("ARCH",'):
+                    if platform == 'linux':
+                        env.write('epicsEnvSet("ARCH",       "linux-x86_64")')
+                    elif platform == 'win32':
+                        env.write('epicsEnvSet("ARCH",       "windows-x64-static")')
+                elif "EPICS_BASE" in line and not bin_flat:
                     print("Fixing base location in envPaths")
                     env.write('epicsEnvSet("EPICS_BASE", "$(SUPPORT)/../base")\n')
                 else:
