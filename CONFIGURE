@@ -18,7 +18,7 @@ TOP_BINARY_DIR=/home/jwlodek/Documents/epics/src
 
 
 # If base and support are in differet directories, set to NO, otherwise YES
-BINARIES_FLAT=NO
+BINARIES_FLAT=YES
 
 
 # All Camera PVs will be $Prefix{$(IOC Type)-Cam:#}
