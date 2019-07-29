@@ -1,12 +1,13 @@
 #!/usr/bin/python3
 
-# script for auto initialization of IOCs from CONFIGURE file
-#
-# Author: Jakub Wlodek
-#
-# This script was taken from the installSynApps set of scripts.
-# Usage instructions can be found in the README.md file in this repo.
-#
+"""
+Script for auto initialization of IOCs from CONFIGURE file.
+
+This script was taken from the installSynApps set of scripts.
+Usage instructions can be found in the README.md file in this repo.
+
+Author: Jakub Wlodek
+"""
 
 # imports
 import os
@@ -15,7 +16,7 @@ import subprocess
 from sys import platform
 
 # version number
-version = "v0.0.2"
+version = "v0.0.4"
 
 
 class IOCAction:
@@ -51,7 +52,7 @@ class IOCAction:
         runs cleanup.sh script to remove unwanted files in generated IOC.
     """
 
-    def __init__(self, ioc_type, ioc_name, ioc_port, connection, ioc_num):
+    def __init__(self, ioc_type, ioc_name, ioc_prefix, asyn_port, ioc_port, connection, ioc_num):
         """
         Constructor for the IOCAction class
 
@@ -69,11 +70,13 @@ class IOCAction:
             Counter that keeps track of which IOC it is
         """
 
-        self.ioc_type = ioc_type
-        self.ioc_name = ioc_name
-        self.ioc_port = ioc_port
+        self.ioc_type   = ioc_type
+        self.ioc_name   = ioc_name
+        self.ioc_prefix = ioc_prefix
+        self.asyn_port  = asyn_port
+        self.ioc_port   = ioc_port
         self.connection = connection
-        self.ioc_num = ioc_num
+        self.ioc_num    = ioc_num
     
 
     def process(self, ioc_top, bin_loc, bin_flat):
@@ -99,6 +102,9 @@ class IOCAction:
         print("-------------------------------------------")
         print("Setup process for IOC " + self.ioc_name)
         print("-------------------------------------------")
+        if os.path.exists(ioc_top + '/' + self.ioc_name):
+            print('ERROR - IOC with name {} already exists.'.format(self.ioc_name))
+            return -1
         out = subprocess.call(["git", "clone", "--quiet", "https://github.com/epicsNSLS2-deploy/ioc-template", ioc_top + "/" + self.ioc_name])
         if out != 0:
             print("Error failed to clone IOC template for ioc {}".format(self.ioc_name))
@@ -123,13 +129,29 @@ class IOCAction:
                 return -1
             
             example_st = open(startup_path, "r+")
-            st = open(ioc_path+"/st.cmd", "w+")
+            if platform =='win32':
+                st_exe = open(ioc_path+'/st.cmd', 'w+')
+                binary_path =  self.getIOCBin(bin_loc, bin_flat)
+                if binary_path is None:
+                    print('ERROR - Could not identify a compiled IOC binary for {}, skipping'.format(self.ioc_type))
+                    return -1
+                else:
+                    st_exe.write(binary_path+' st_base.cmd\n')
+                st_exe.close()
+                st = open(ioc_path+"/st_base.cmd", "w+")
+            else:
+                st = open(ioc_path+"/st.cmd", "w+")
 
             line = example_st.readline()
 
             while line:
                 if "#!" in line:
-                    st.write("#!" + self.getIOCBin(bin_loc, bin_flat) + "\n")
+                    if platform != 'win32':
+                        binary_path =  self.getIOCBin(bin_loc, bin_flat) 
+                        if binary_path is None:
+                            print('ERROR - Could not identify a compiled IOC binary for {}, skipping'.format(self.ioc_type))
+                            return -1
+                        st.write("#!" + binary_path + "\n")
                 elif "envPaths" in line:
                     st.write("< envPaths\n")
                 else:
@@ -153,6 +175,7 @@ class IOCAction:
                     if startup_type in file.lower():
                         print('Copying dependency file {} for {}'.format(file, self.ioc_type))
                         os.rename(ioc_path + "/dependancyFiles/" + file, ioc_path + "/" + file)
+                        self.fix_macros(ioc_path + '/' + file)
 
             return 0
 
@@ -212,7 +235,7 @@ class IOCAction:
                     elif "IOC" in line and "IOCNAME" not in line:
                         uq.write('epicsEnvSet("IOC", "{}")\n'.format("ioc"+self.ioc_type))
                     elif "PORT" in line:
-                        uq.write('epicsEnvSet("PORT", "{}")\n'.format(self.ioc_type[2:]+"1"))
+                        uq.write('epicsEnvSet("PORT", "{}")\n'.format(self.asyn_port))
                     else:
                         uq.write(line)
                 else:
@@ -281,7 +304,12 @@ class IOCAction:
             env = open(env_path, "w")
             line = env_old.readline()
             while line:
-                if "EPICS_BASE" in line and not bin_flat:
+                if line.startswith('epicsEnvSet("ARCH",'):
+                    if platform == 'linux':
+                        env.write('epicsEnvSet("ARCH",       "linux-x86_64")\n')
+                    elif platform == 'win32':
+                        env.write('epicsEnvSet("ARCH",       "windows-x64-static")\n')
+                elif "EPICS_BASE" in line and not bin_flat:
                     print("Fixing base location in envPaths")
                     env.write('epicsEnvSet("EPICS_BASE", "$(SUPPORT)/../base")\n')
                 else:
@@ -308,34 +336,59 @@ class IOCAction:
             Path to the IOC executable located in driverName/iocs/IOC/bin/OS/driverApp
         """
 
-        if bin_flat:
-            # if flat, there is no support directory
-            driver_path = bin_loc + "/areaDetector/" + self.ioc_type
-        else:
-            driver_path = bin_loc + "/support/areaDetector/" + self.ioc_type
-        # identify the IOCs folder
-        for name in os.listdir(driver_path):
-            if "ioc" == name or "iocs" == name:
+        try:
+            if bin_flat:
+                # if flat, there is no support directory
+                driver_path = bin_loc + "/areaDetector/" + self.ioc_type
+            else:
+                driver_path = bin_loc + "/support/areaDetector/" + self.ioc_type
+            # identify the IOCs folder
+            for name in os.listdir(driver_path):
+                if "ioc" == name or "iocs" == name:
+                    driver_path = driver_path + "/" + name
+                    break
+            # identify the IOC 
+            for name in os.listdir(driver_path):
+                if "IOC" in name or "ioc" in name:
+                    driver_path = driver_path + "/" + name
+                    break 
+            # Find the bin folder
+            driver_path = driver_path + "/bin"
+            # There should only be one architecture
+            for name in os.listdir(driver_path):
                 driver_path = driver_path + "/" + name
                 break
-        # identify the IOC 
-        for name in os.listdir(driver_path):
-            if "IOC" in name or "ioc" in name:
-                driver_path = driver_path + "/" + name
-                break 
-        # Find the bin folder
-        driver_path = driver_path + "/bin"
-        # There should only be one architecture
-        for name in os.listdir(driver_path):
-            driver_path = driver_path + "/" + name
-            break
-        # We look for the executable that ends with App
-        for name in os.listdir(driver_path):
-            if 'App' in name:
-                driver_path = driver_path + "/" + name
-                break
+            # We look for the executable that ends with App
+            for name in os.listdir(driver_path):
+                if 'App' in name:
+                    driver_path = driver_path + "/" + name
+                    break
 
-        return driver_path
+            return driver_path
+        except FileNotFoundError:
+            return None
+
+
+    def fix_macros(self, file_path):
+        """
+        Function that replaces certain macros in given filepath
+
+        Parameters
+        ----------
+        file_path : str
+            path to the target file
+        """
+
+        os.rename(file_path, file_path + '_OLD')
+        old = open(file_path+'_OLD', 'r')
+        contents = old.read()
+        contents = contents.replace('$(PREFIX)', self.ioc_prefix)
+        contents = contents.replace('$(PORT)', self.asyn_port)
+        new = open(file_path, 'w')
+        new.write(contents)
+        old.close()
+        new.close()
+        os.remove(file_path+'_OLD')
 
 
     def cleanup(self, ioc_top):
@@ -343,16 +396,16 @@ class IOCAction:
 
         cleanup_completed = False
 
-        if platform == "linux":
-            if(os.path.exists(ioc_top + "/" + self.ioc_name + "/cleanup.sh")):
-                print("Performing cleanup for {}".format(self.ioc_name))
-                out = subprocess.call(["bash", ioc_top + "/" + self.ioc_name + "/cleanup.sh"])
-                print()
-                cleanup_completed = True
-        elif platform == "win32":
+        if platform == "win32":
             if(os.path.exists(ioc_top + "/" + self.ioc_name + "/cleanup.bat")):
                 print("Performing cleanup for {}".format(self.ioc_name))
                 out = subprocess.call([ioc_top + "/" + self.ioc_name + "/cleanup.bat"])
+                print()
+                cleanup_completed = True
+        else:
+            if(os.path.exists(ioc_top + "/" + self.ioc_name + "/cleanup.sh")):
+                print("Performing cleanup for {}".format(self.ioc_name))
+                out = subprocess.call(["bash", ioc_top + "/" + self.ioc_name + "/cleanup.sh"])
                 print()
                 cleanup_completed = True
         if os.path.exists(ioc_top +"/" + self.ioc_name + "/st.cmd"):
@@ -398,9 +451,10 @@ def read_ioc_config():
                 bin_flat = False
         elif not line.startswith('#') and len(line) > 1:
             line = line.strip()
+            line = re.sub('\t', ' ', line)
             line = re.sub(' +', ' ', line)
             temp = line.split(' ')
-            ioc_action = IOCAction(temp[0], temp[1], temp[2], temp[3], ioc_num_counter)
+            ioc_action = IOCAction(temp[0], temp[1], configuration['PREFIX'], temp[2], temp[3], temp[4], ioc_num_counter)
             ioc_num_counter = ioc_num_counter + 1
             ioc_actions.append(ioc_action)
 
