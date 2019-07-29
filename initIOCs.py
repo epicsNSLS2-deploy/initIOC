@@ -142,9 +142,7 @@ class IOCAction:
                 return -1
             
             example_st = open(startup_path, "r+")
-            if platform == 'linux':
-                st = open(ioc_path+"/st.cmd", "w+")
-            elif platform =='win32':
+            if platform =='win32':
                 st_exe = open(ioc_path+'/st.cmd', 'w+')
                 binary_path =  self.getIOCBin(bin_loc, bin_flat)
                 if binary_path is None:
@@ -154,12 +152,14 @@ class IOCAction:
                     st_exe.write(binary_path+' st_base.cmd\n')
                 st_exe.close()
                 st = open(ioc_path+"/st_base.cmd", "w+")
+            else:
+                st = open(ioc_path+"/st.cmd", "w+")
 
             line = example_st.readline()
 
             while line:
                 if "#!" in line:
-                    if platform == 'linux':
+                    if platform != 'win32':
                         binary_path =  self.getIOCBin(bin_loc, bin_flat) 
                         if binary_path is None:
                             print('ERROR - Could not identify a compiled IOC binary for {}, skipping'.format(self.ioc_type))
@@ -409,16 +409,16 @@ class IOCAction:
 
         cleanup_completed = False
 
-        if platform == "linux":
-            if(os.path.exists(ioc_top + "/" + self.ioc_name + "/cleanup.sh")):
-                print("Performing cleanup for {}".format(self.ioc_name))
-                out = subprocess.call(["bash", ioc_top + "/" + self.ioc_name + "/cleanup.sh"])
-                print()
-                cleanup_completed = True
-        elif platform == "win32":
+        if platform == "win32":
             if(os.path.exists(ioc_top + "/" + self.ioc_name + "/cleanup.bat")):
                 print("Performing cleanup for {}".format(self.ioc_name))
                 out = subprocess.call([ioc_top + "/" + self.ioc_name + "/cleanup.bat"])
+                print()
+                cleanup_completed = True
+        else:
+            if(os.path.exists(ioc_top + "/" + self.ioc_name + "/cleanup.sh")):
+                print("Performing cleanup for {}".format(self.ioc_name))
+                out = subprocess.call(["bash", ioc_top + "/" + self.ioc_name + "/cleanup.sh"])
                 print()
                 cleanup_completed = True
         if os.path.exists(ioc_top +"/" + self.ioc_name + "/st.cmd"):
