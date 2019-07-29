@@ -13,10 +13,14 @@ Author: Jakub Wlodek
 import os
 import re
 import subprocess
+import argparse
 from sys import platform
 
 # version number
 version = "v0.0.4"
+
+# Some constants
+KERNEL_PATH_LIMIT = 127
 
 supported_drivers = {
     'ADProsilica',
@@ -28,7 +32,8 @@ supported_drivers = {
     'ADPerkinElmer',
     'ADPilatus',
     'ADSpinnaker',
-    'ADAndor3'
+    'ADAndor3',
+    'ADURL'
 }
 
 
@@ -42,6 +47,10 @@ class IOCAction:
         name of areaDetector driver instance the IOC is linked to ex. ADProsilica
     ioc_name : str
         name of the IOC ex. cam-ps1
+    ioc_prefix : str
+        Prefix used by the IOC
+    asyn_port : str
+        asyn port used for outputting NDArrays
     ioc_port : str
         telnet port on which procserver will run the IOC
     connection : str
@@ -65,6 +74,7 @@ class IOCAction:
         runs cleanup.sh script to remove unwanted files in generated IOC.
     """
 
+
     def __init__(self, ioc_type, ioc_name, ioc_prefix, asyn_port, ioc_port, connection, ioc_num):
         """
         Constructor for the IOCAction class
@@ -72,9 +82,13 @@ class IOCAction:
         Parameters
         ----------
         ioc_type : str
-        name of areaDetector driver instance the IOC is linked to ex. ADProsilica
+            name of areaDetector driver instance the IOC is linked to ex. ADProsilica
         ioc_name : str
             name of the IOC ex. cam-ps1
+        ioc_prefix : str
+            Prefix used by the IOC
+        asyn_port : str
+            asyn port used for outputting NDArrays
         ioc_port : str
             telnet port on which procserver will run the IOC
         connection : str
@@ -118,6 +132,11 @@ class IOCAction:
         if os.path.exists(ioc_top + '/' + self.ioc_name):
             print('ERROR - IOC with name {} already exists.'.format(self.ioc_name))
             return -1
+        binary_path =  self.getIOCBin(bin_loc, bin_flat) 
+        if binary_path is None:
+            print('ERROR - Could not identify a compiled IOC binary for {}, skipping'.format(self.ioc_type))
+            print('Make sure that the binary exists and is compiled in the expected location, and make sure BINARIES_FLAT is correct.')
+            return -1
         out = subprocess.call(["git", "clone", "--quiet", "https://github.com/epicsNSLS2-deploy/ioc-template", ioc_top + "/" + self.ioc_name])
         if out != 0:
             print("Error failed to clone IOC template for ioc {}".format(self.ioc_name))
@@ -130,28 +149,27 @@ class IOCAction:
             startup_path = ioc_path+"/startupScripts"
             startup_type = self.ioc_type[2:].lower()
 
-            found = False
-
             for file in os.listdir(ioc_path +"/startupScripts"):
                 if startup_type in file.lower():
                     startup_path = startup_path + "/" + file
-                    found = True
                     break
-            if not found:
-                print('ERROR - {} is not yet supported by initIOCs, skipping'.format(self.ioc_type))
-                return -1
             
+            exe_written = False
+
             example_st = open(startup_path, "r+")
             if platform =='win32':
                 st_exe = open(ioc_path+'/st.cmd', 'w+')
-                binary_path =  self.getIOCBin(bin_loc, bin_flat)
-                if binary_path is None:
-                    print('ERROR - Could not identify a compiled IOC binary for {}, skipping'.format(self.ioc_type))
-                    return -1
-                else:
-                    st_exe.write(binary_path+' st_base.cmd\n')
+                st_exe.write(binary_path+' st_base.cmd\n')
                 st_exe.close()
                 st = open(ioc_path+"/st_base.cmd", "w+")
+                exe_written = True
+            elif len(binary_path) > KERNEL_PATH_LIMIT:     # The path length limit for shebangs (#!/) on linux is usually kernel based and set to 127
+                print('WARNING - Path to executable exceeds legal bash limit, generating st.cmd and st_base.cmd')
+                st_exe = open(ioc_path + '/st.cmd', 'w+')
+                st_exe.write(binary_path + ' st_base.cmd\n')
+                st = open(ioc_path+"/st_base.cmd", "w+")
+                st_exe.close()
+                exe_written = True
             else:
                 st = open(ioc_path+"/st.cmd", "w+")
 
@@ -159,11 +177,7 @@ class IOCAction:
 
             while line:
                 if "#!" in line:
-                    if platform != 'win32':
-                        binary_path =  self.getIOCBin(bin_loc, bin_flat) 
-                        if binary_path is None:
-                            print('ERROR - Could not identify a compiled IOC binary for {}, skipping'.format(self.ioc_type))
-                            return -1
+                    if not exe_written:
                         st.write("#!" + binary_path + "\n")
                 elif "envPaths" in line:
                     st.write("< envPaths\n")
@@ -185,10 +199,11 @@ class IOCAction:
 
             if os.path.exists(ioc_path + "/dependancyFiles"):
                 for file in os.listdir(ioc_path + "/dependancyFiles"):
-                    if startup_type in file.lower():
+                    if file.lower().startswith(startup_type):
                         print('Copying dependency file {} for {}'.format(file, self.ioc_type))
-                        os.rename(ioc_path + "/dependancyFiles/" + file, ioc_path + "/" + file)
-                        self.fix_macros(ioc_path + '/' + file)
+                        # Copy all required dependency files
+                        os.rename(ioc_path + "/dependancyFiles/" + file, ioc_path + "/" + file.split('_', 1)[-1])
+                        self.fix_macros(ioc_path + '/' + file.split('_', 1)[-1])
 
             return 0
 
@@ -318,10 +333,10 @@ class IOCAction:
             line = env_old.readline()
             while line:
                 if line.startswith('epicsEnvSet("ARCH",'):
-                    if platform == 'linux':
-                        env.write('epicsEnvSet("ARCH",       "linux-x86_64")\n')
-                    elif platform == 'win32':
+                    if platform == 'win32':
                         env.write('epicsEnvSet("ARCH",       "windows-x64-static")\n')
+                    else:
+                        env.write('epicsEnvSet("ARCH",       "linux-x86_64")\n')
                 elif "EPICS_BASE" in line and not bin_flat:
                     print("Fixing base location in envPaths")
                     env.write('epicsEnvSet("EPICS_BASE", "$(SUPPORT)/../base")\n')
@@ -346,7 +361,7 @@ class IOCAction:
         Return
         ------
         driver_path : str
-            Path to the IOC executable located in driverName/iocs/IOC/bin/OS/driverApp
+            Path to the IOC executable located in driverName/iocs/IOC/bin/OS/driverApp or None if not found
         """
 
         try:
@@ -362,7 +377,8 @@ class IOCAction:
                     break
             # identify the IOC 
             for name in os.listdir(driver_path):
-                if "IOC" in name or "ioc" in name:
+                # Add check to see if NOIOC in name - occasional problems generating ADSimDetector
+                if "IOC" in name or "ioc" in name and "NOIOC" not in name.upper():
                     driver_path = driver_path + "/" + name
                     break 
             # Find the bin folder
@@ -384,7 +400,7 @@ class IOCAction:
 
     def fix_macros(self, file_path):
         """
-        Function that replaces certain macros in given filepath
+        Function that replaces certain macros in given filepath (used primarily for substitution files)
 
         Parameters
         ----------
@@ -402,6 +418,63 @@ class IOCAction:
         old.close()
         new.close()
         os.remove(file_path+'_OLD')
+
+
+    def create_path_scripts(self, bin_loc, bin_flat, ioc_top):
+        """
+        Function that attempts to create scripts for setting the dev environment for the IOC given the location of the binaries.
+
+        Parameters
+        ----------
+        bin_loc : str
+            given path to binaries
+        bin_flat : bool
+            toggle that determines if the binaries have a flat structure or not
+        ioc_top : str
+            path to the ioc output_directory
+        """
+
+        if platform == "win32":
+            delimeter = ';'
+            closer = '%PATH%"'
+            arch='windows-x64-static'
+            path_file = open(ioc_top + '/' + self.ioc_name + '/dllPath.bat', 'w+')
+            path_file.write('@ECHO OFF\n')
+            path_file.write('SET "PATH=')
+        else:
+            delimeter = ':'
+            closer = '$LD_LIBRARY_PATH'
+            arch = 'linux-x86_64'
+            path_file = open(ioc_top + '/' + self.ioc_name + '/ldpath.sh', 'w+')
+            path_file.write('export LD_LIBRARY_PATH=')
+        path_file.write(bin_loc + '/base/bin/' + arch)
+        path_file.write(delimeter)
+        path_file.write(bin_loc + '/base/lib/' + arch)
+        path_file.write(delimeter)
+        if bin_flat:
+            support_dir = bin_loc
+        else:
+            support_dir = bin_loc + '/support'
+
+        if os.path.exists(support_dir) and os.path.isdir(support_dir):
+            for dir in os.listdir(support_dir):
+                if os.path.isdir(support_dir + '/' + dir) and dir != "base" and dir != "areaDetector":
+                    path_file.write(support_dir + '/' + dir + '/bin/' + arch)
+                    path_file.write(delimeter)
+                    path_file.write(support_dir + '/' + dir + '/lib/' + arch)
+                    path_file.write(delimeter)
+
+        ad_dir = support_dir + '/areaDetector'
+        if os.path.exists(ad_dir) and os.path.isdir(ad_dir):
+            for dir in os.listdir(ad_dir):
+                if os.path.isdir(ad_dir + '/' + dir) and dir.startswith('AD'):
+                    path_file.write(ad_dir + '/' + dir + '/bin/' + arch)
+                    path_file.write(delimeter)
+                    path_file.write(ad_dir + '/' + dir + '/lib/' + arch)
+                    path_file.write(delimeter)
+
+        path_file.write(closer)
+        path_file.close()
 
 
     def cleanup(self, ioc_top):
@@ -430,6 +503,31 @@ class IOCAction:
 #-------------------------------------------------
 #----------------MAIN SCRIPT FUNCTIONS------------
 #-------------------------------------------------
+
+
+def parse_line_into_action(line, prefix, ioc_num_counter):
+    """
+    Function that parses a line in the CONFIGURE table into an IOCAction object
+
+    Parameters
+    ----------
+    line : str
+        The line to parse from the table
+    ioc_num_counter : int
+        the ioc counter
+    
+    Returns
+    -------
+    ioc_action : IOCAction
+        the IOCAction object that contains information parsed from the line
+    """
+
+    line = line.strip()
+    line = re.sub('\t', ' ', line)
+    line = re.sub(' +', ' ', line)
+    temp = line.split(' ')
+    ioc_action = IOCAction(temp[0], temp[1], prefix, temp[2], temp[3], temp[4], ioc_num_counter)
+    return ioc_action
 
 
 def read_ioc_config():
@@ -463,11 +561,7 @@ def read_ioc_config():
             if "NO" in line:
                 bin_flat = False
         elif not line.startswith('#') and len(line) > 1:
-            line = line.strip()
-            line = re.sub('\t', ' ', line)
-            line = re.sub(' +', ' ', line)
-            temp = line.split(' ')
-            ioc_action = IOCAction(temp[0], temp[1], configuration['PREFIX'], temp[2], temp[3], temp[4], ioc_num_counter)
+            ioc_action = parse_line_into_action(line, configuration['PREFIX'], ioc_num_counter)
             ioc_num_counter = ioc_num_counter + 1
             ioc_actions.append(ioc_action)
 
@@ -498,9 +592,7 @@ def init_ioc_dir(ioc_top):
 
 
 def print_start_message():
-    """
-    Function for printing initial message
-    """
+    """ Function for printing initial message """
 
     print("+----------------------------------------------------------------+")
     print("+ initIOCs, Version: " + version +"                                      +")
@@ -521,6 +613,69 @@ def print_supported_drivers():
     print()
 
 
+def execute_ioc_action(action, configuration, bin_flat):
+    """
+    Function that runs all required IOC action functions with a given configuration
+
+    Parameters
+    ----------
+    action : IOCAction
+        currently executing IOC action
+    configuration : dict of str to str
+        configuration settings as read from CONFIGURE or inputted by user
+    bin_flat : bool
+        toggle that tells the script if binaries are flat of not
+    """
+
+    # Perform the overall process action
+    out = action.process(configuration["IOC_DIR"], configuration["TOP_BINARY_DIR"], bin_flat)
+    # if successfull, update any remaining required files
+    if out == 0:
+        action.update_unique(configuration["IOC_DIR"], configuration["TOP_BINARY_DIR"], bin_flat, 
+            configuration["PREFIX"], configuration["ENGINEER"], configuration["HOSTNAME"], 
+            configuration["CA_ADDRESS"])
+        action.update_config(configuration["IOC_DIR"], configuration["HOSTNAME"])
+        action.fix_env_paths(configuration["IOC_DIR"], bin_flat)
+        action.create_path_scripts(configuration["TOP_BINARY_DIR"], bin_flat, configuration["IOC_DIR"])
+        action.cleanup(configuration["IOC_DIR"])
+
+
+def guided_init():
+    """ Function that guides the user through generating a single IOC through the CLI """
+
+    print_start_message()
+    print('Welcome to initIOC!')
+    configuration = {}
+    configuration['IOC_DIR'] = input('Enter the ioc output location. > ')
+    configuration['TOP_BINARY_DIR'] = input('Enter the location of your compiled binaries. > ')
+    temp = input('Is the binary structure flat? (i.e. asyn, areaDetector etc. are in same directory as base) (y/n). > ')
+    bin_flat = False
+    if temp == 'y':
+        bin_flat = True
+    configuration['PREFIX'] = input('Enter the IOC Prefix (without the camera specific portion ex. XF:10IDC-BI). > ')
+    configuration['HOSTNAME'] = input('Enter the IOC server hostname. > ')
+    configuration['ENGINEER'] = input('Enter your name and contact information. > ')
+    configuration['CA_ADDRESS'] = input('Enter the CA_ADDRESS IP. > ')
+    another_ioc = True
+    while another_ioc:
+        driver_type = None
+        while driver_type is None:
+            driver_type = input('What driver type would you like to generate? > ')
+            if driver_type not in supported_drivers:
+                driver_type = None
+                print('The selected driver type is not supported. See list of supported drivers below.')
+                print_supported_drivers()
+        ioc_name = input('What should the IOC name be? > ')
+        asyn_port = input('What asyn port should the IOC use? (ex. PS1). > ')
+        ioc_port = input('What telnet port should procServer use to run the IOC? > ')
+        connection = input('Enter the connection param for your device. (ex. IP, serial number etc.) enter NA if not sure. > ')
+        ioc_action = IOCAction(driver_type, ioc_name, configuration['PREFIX'], asyn_port, ioc_port, connection, 1)
+        execute_ioc_action(ioc_action, configuration, bin_flat)
+        another = input('Would you like to generate another IOC? (y/n). > ')
+        if another != 'y':
+            another_ioc = False
+
+
 def init_iocs():
     """
     Main driver function. First calls read_ioc_config, then for each instance of IOCAction
@@ -537,18 +692,26 @@ def init_iocs():
             print('To request support for {} to be added to initIOC, please create an issue on:'.format(action.ioc_type))
             print('https://github.com/epicsNSLS2-deploy/initIOC/issues')
         else:
-            out = action.process(configuration["IOC_DIR"], configuration["TOP_BINARY_DIR"], bin_flat)
-            if out == 0:
-                action.update_unique(configuration["IOC_DIR"], configuration["TOP_BINARY_DIR"], bin_flat, 
-                    configuration["PREFIX"], configuration["ENGINEER"], configuration["HOSTNAME"], 
-                    configuration["CA_ADDRESS"])
-                action.update_config(configuration["IOC_DIR"], configuration["HOSTNAME"])
-                action.fix_env_paths(configuration["IOC_DIR"], bin_flat)
-                action.cleanup(configuration["IOC_DIR"])
+            execute_ioc_action(action, configuration, bin_flat)
+
+
+def parse_args():
+    parser = argparse.ArgumentParser(description='A script for auto-initializing areaDetector IOCs. Edit the CONFIGURE file and run without arguments for default operation.')
+
+    parser.add_argument('-i', '--individual', action='store_true', help='Add this flag to go through a guided process for generating a single IOC at a time.')
+    parser.add_argument('-g', '--gui', action='store_true', help='Add this flag to enable the GUI version of initIOC.')
+    arguments = vars(parser.parse_args())
+    if arguments['individual']:
+        guided_init()
+    elif arguments['gui']:
+        print('The initIOC gui is not yet supported in version {} - Exiting'.format(version))
+        exit()
+    else:
+        init_iocs()
 
 
 # Run the script
-init_iocs()
+parse_args()
 
 
 
