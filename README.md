@@ -40,6 +40,14 @@ Once all of these configuration options are set and the IOCs are added to the ta
 ```
 in the top level of this directory. **(Note that python3 is required for the script to run)**
 
+You may also utilize certain optional command line flags with initIOC:
+
+Option | Description
+------|------------
+-h / --help | Prints help information
+-i / --individual | Gives you a guided process for initializing IOCs one at a time
+-g / --gui | Starts the GUI version of initIOC - will be available in later versions
+
 ### Currently supported drivers
 
 initIOCs.py relies on [ioc-template](https://github.com/epicsNSLS2-deploy/ioc-template) to deploy its IOCs, and as a result, IOC support is limited to those drivers that have startup scripts located in `ioc-template`. Currently this includes:
@@ -53,3 +61,4 @@ initIOCs.py relies on [ioc-template](https://github.com/epicsNSLS2-deploy/ioc-te
 * ADSpinnaker
 * ADPointGrey
 * ADSimDetector
+* ADURL
