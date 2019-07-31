@@ -674,6 +674,7 @@ def guided_init():
         another = input('Would you like to generate another IOC? (y/n). > ')
         if another != 'y':
             another_ioc = False
+    print('Done.')
 
 
 def init_iocs():

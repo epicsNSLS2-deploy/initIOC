@@ -10,11 +10,11 @@
 #------------MAIN CONFIGURATION-----------------
 
 # Top Level IOC directory (Where all your IOCs will be located)
-IOC_DIR=/home/jwlodek/Documents/epics/iocs
+IOC_DIR=/epics/iocs
 
 
 # Top Level dir containing compiled binaries.
-TOP_BINARY_DIR=/home/jwlodek/Documents/epics/src
+TOP_BINARY_DIR=/ad-nfs/epics/prod/Deb9/production
 
 
 # If base and support are in differet directories, set to NO, otherwise YES
@@ -23,7 +23,7 @@ BINARIES_FLAT=YES
 
 # All Camera PVs will be $Prefix{$(IOC Type)-Cam:#}
 # Ex: XF:10IDC-BI{UVC-Cam:2}
-PREFIX=13SIM1:
+PREFIX=XF:10IDC-BI
 
 
 # Note that IOC type must have 'AD' at the start
@@ -34,12 +34,6 @@ PREFIX=13SIM1:
 # IOC Type    IOC Name        Asyn Port      IOC Port      Cam Connection
 #-------------------------------------------------------------------------
 ADSimDetector  cam-sim1         SIM1           4000              NA
-#ADSimDetector  cam-sim2         SIM1           4001              NA
-#ADSimDetector  cam-sim3         SIM1           4002              NA
-#ADUVC         cam-uvc3         UVC1           4003             49490
-#ADProsilica   cam-ps1          PS1            4001          EX.AM.PLE.IP
-#ADAndor3      cam-andor3       AD3            4002          /exam/ple/path
-#ADPointGrey    cam-pg1          PG1             1000            1111111
 
 
 #------------ADDITIONAL CONFIGURATION-----------------
