@@ -1,4 +1,4 @@
-#
+#TEST
 # Configuration file used for generating IOCs with initIOCs script.
 # All necessary unique elements are defined here in order to simplify deploying multiple NEW
 # IOCs to beamlines. Note that existing IOCs should be updated using https://github.com/epicsNSLS2-deploy/updateIOC

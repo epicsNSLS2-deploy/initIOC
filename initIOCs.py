@@ -10,6 +10,7 @@ Author: Jakub Wlodek
 """
 
 # imports
+from tkinter import *
 import os
 import re
 import subprocess
@@ -35,6 +36,48 @@ supported_drivers = {
     'ADAndor3',
     'ADURL'
 }
+
+
+class ToolTip(object):
+
+    def __init__(self, widget):
+        self.widget = widget
+        self.tipwindow = None
+        self.id = None
+        self.x = 0
+        self.y = 0
+
+    def showtip(self, text):
+        "Display text in tooltip window"
+        self.text = text
+        if self.tipwindow or not self.text:
+            return
+        x, y, cx, cy = self.widget.bbox("insert")
+        x = x + self.widget.winfo_rootx() + 57
+        y = y + cy + self.widget.winfo_rooty() +27
+        self.tipwindow = tw = Toplevel(self.widget)
+        tw.wm_overrideredirect(1)
+        tw.wm_geometry("+%d+%d" % (x, y))
+        label = Label(tw, text=self.text, justify=LEFT,
+                      background="#ffffe0", relief=SOLID, borderwidth=1,
+                      font=("tahoma", "8", "normal"))
+        label.pack(ipadx=1)
+
+    def hidetip(self):
+        tw = self.tipwindow
+        self.tipwindow = None
+        if tw:
+            tw.destroy()
+
+def CreateToolTip(widget, text):
+    toolTip = ToolTip(widget)
+    def enter(event):
+        toolTip.showtip(text)
+    def leave(event):
+        toolTip.hidetip()
+    widget.bind('<Enter>', enter)
+    widget.bind('<Leave>', leave)
+
 
 
 class IOCAction:
@@ -694,6 +737,410 @@ def init_iocs():
         else:
             execute_ioc_action(action, configuration, bin_flat)
 
+def init_iocs_GUI(actions, configuration, bin_flat):
+    for action in actions:
+        print("I am in here " +  configuration[0])
+        print(bin_flat)
+        out = action.process(configuration[0], configuration[1], bin_flat)
+        if out == 0:
+            action.update_unique(configuration[0], configuration[1], bin_flat,
+                configuration[3], configuration[4], configuration[5], 
+                configuration[6])
+            action.update_config(configuration[0], configuration[5])
+            action.fix_env_paths(configuration[0], bin_flat)
+            action.cleanup(configuration[0])
+
+
+class Window(Frame):
+
+
+
+# Define settings upon initialization. Here you can specify
+    def __init__(self, master=None):     
+        # parameters that you want to send through the Frame class. 
+        Frame.__init__(self, master)   
+
+        #reference to the master widget, which is the tk window                 
+        self.master = master
+
+        #with that, we want to then run init_window, which doesn't yet exist
+        self.init_window()
+    
+
+    #Creation of init_window
+    def init_window(self):
+        check = False
+        check2 = False 
+        preffixValue = ""
+        arr = []
+        iocActions = []
+        configfile = Text(wrap=WORD, width=100, height= 10)
+        with open("CONFIGURE.txt", 'r+') as f:
+            for line in f:
+                line = line.strip()
+                if line.startswith("#------------MAIN"):
+                    check = True
+                if check == True and  line != "":
+                    arr.append(line)
+                if line.startswith("# IOC Type"):
+                    check = False
+                    configfile.insert(INSERT, line)
+                    configfile.pack(fill="none", expand=TRUE, side = RIGHT)
+                if line.startswith("AD"):
+                    configfile.insert(END, "\n")
+                    configfile.insert(END, line)
+                    stringInfo = preffixValue
+
+                    r = stringInfo.split("=")
+                    line = line + " " +r[1]
+                    configfile.pack(fill="none", expand=TRUE, side = RIGHT)
+                    iocActions.append(self.iocActionMaker(line))
+                if line.startswith("#------------ADDITIONAL"):
+                    check2 = True
+                if check2 == True and line != "":
+                    arr.append(line)
+                if line.startswith("PREFIX"):
+                    preffixValue = line
+        
+        commentArray = []
+        fillinArray = []
+        for i in range(len(arr)):
+            if arr[i].startswith("#"):
+                commentArray.append(arr[i])
+            if arr[i].startswith("#") != True:
+                fillinArray.append(arr[i])
+
+
+
+        """ THIS IS MAKING ENTRY FOR THE USERS"""
+        status1 = StringVar()
+        status2 = StringVar()
+        status3 = StringVar()
+        status4 = StringVar()
+        status5 = StringVar()
+        status6 = StringVar()
+        status7 = StringVar()
+
+
+        stringInfo = fillinArray[0]
+        r = stringInfo.split("=")
+        strLable = str(r[0])
+
+        ioc_Lable = Label(self, text = strLable)
+        ioc_Lable.pack()
+        ioc_Lable.place(x=0, y=0)
+
+        strEntry = str(r[1])
+        ioc_dir = Entry(self, textvariable = status1)
+        ioc_dir.pack()
+        ioc_dir.place(x=50, y=0)
+        ioc_dir.insert(0, strEntry)
+        
+        stringInfo = fillinArray[1]
+        r = stringInfo.split("=")
+        strLable = str(r[0])
+        top_Lable = Label(self, text=strLable)
+        top_Lable.pack()
+        top_Lable.place(x=1, y = 30)
+
+        CreateToolTip(ioc_dir, commentArray[1])
+        
+        strEntry = str(r[1])
+        top_binary = Entry(self, textvariable = status2)
+        top_binary.pack()
+        top_binary.place(x = 100, y = 30)
+        top_binary.insert(0,strEntry)
+
+        stringInfo = fillinArray[2]
+        r = stringInfo.split("=")
+        strLable = str(r[0])
+
+
+        
+        binary_Label = Label(self, text=strLable)
+        binary_Label.pack()
+        binary_Label.place(x = 2, y = 60)
+
+        CreateToolTip(top_binary, commentArray[2])
+        strEntry = str(r[1])
+        binary_flat = Entry(self,textvariable=status3)
+        binary_flat.pack()
+        binary_flat.place(x = 90 , y = 60)
+        binary_flat.insert(0, strEntry)
+        
+
+        
+        stringInfo = fillinArray[3]
+        r = stringInfo.split("=")
+        strLable = str(r[0])
+
+        CreateToolTip(binary_flat, commentArray[3])
+        prefix_Label = Label(self, text=strLable)
+        prefix_Label.pack()
+        prefix_Label.place(x=3, y= 90)
+
+        strEntry = str(r[1])
+        prefix = Entry(self, textvariable=status4)
+        prefix.pack()
+        prefix.insert(0,strEntry)
+        prefix.place(x = 45 , y = 90)
+
+        doubleComment = commentArray[4] + "\n" +commentArray[5]
+
+        CreateToolTip(prefix, doubleComment)
+
+        
+        
+        stringInfo = fillinArray[4]
+        r = stringInfo.split("=")
+        strLable = str(r[0])
+
+        engineer_label = Label(self, text=strLable)
+        engineer_label.pack()
+        engineer_label.place(x = 4 , y=110)
+
+        
+
+        strEntry = str(r[1])
+        engineer = Entry(self, textvariable=status5)
+        engineer.pack()
+        engineer.insert(0,strEntry)
+        engineer.place(x=65, y=110)
+
+        CreateToolTip(engineer, commentArray[12])
+        
+
+        
+        stringInfo = fillinArray[5]
+        r = stringInfo.split("=")
+        strLable = str(r[0])
+
+        hostname_label = Label(self, text=strLable)
+        hostname_label.pack()
+        hostname_label.place(x=5,y=140)
+
+        strEntry = str(r[1])
+        hostname = Entry(self,textvariable=status6)
+        hostname.pack()
+        hostname.insert(0,strEntry)
+        hostname.place(x = 75, y = 140)
+        
+        CreateToolTip(hostname, commentArray[13])
+
+        
+        stringInfo = fillinArray[6]
+        r = stringInfo.split("=")
+        strLable = str(r[0])
+
+        ca_address_label = Label(self, text=strLable)
+        ca_address_label.pack()
+        ca_address_label.place(x=6, y=170)
+
+       
+
+        strEntry = str(r[1])
+        ca_address = Entry(self,textvariable=status7)
+        ca_address.pack()
+        ca_address.insert(0,strEntry)
+        ca_address .place(x=80, y=170)
+
+        CreateToolTip(ca_address, commentArray[14])
+   
+        #v1 = StringVar()
+        #v2 = StringVar()
+        #v3 = StringVar()
+        
+        # changing the title of our master widget      
+        self.master.title("initIOC_GUI")
+
+        # allowing the widget to take the full space of the root window
+        self.pack(fill=BOTH, expand=1)
+        iocActions2 = []
+        # creating a button instance
+        saveButton = Button(self, text="Save",command=lambda: self.save(configfile)) 
+        runButton = Button(self, text="Run", command=lambda: self.exe(status1,status2,status3,status4,status5,status6,status7,iocActions))
+        addButton = Button(self, text = "Add IOC", command=lambda: iocActions.append(self.add_ioc(configfile,iocActions2)))
+        # placing the button on my window
+        addButton.place(x = 600, y = 150)
+        addButton.pack()
+        #saveButton.place(x=10, y=20)
+        runButton.place(x=10, y=40)
+        runButton.pack()
+        #saveButton.pack()
+        #advanceButton.place(x=200, y =2)
+
+    def exe(self,status1,status2,status3,status4,status5,status6, status7, iocActions):
+        bin_flats = False
+        configurations = []
+        configurations.append(status1.get())
+        print(configurations[0])
+        configurations.append(status2.get())
+        configurations.append(status3.get())
+        configurations.append(status4.get())
+        configurations.append(status5.get())
+        configurations.append(status6.get())
+        configurations.append(status7.get())
+        
+        if  configurations[2] == "NO":
+            bin_flats = False
+        elif configurations[2] == "YES":
+            bin_flats = True
+
+        init_iocs_GUI(iocActions,configurations,bin_flats)
+
+
+    def iocActionMaker(self,line):
+        arr = []
+        line = line.strip()
+        while len(line) > 0:
+            line = line.strip()
+            info = line.split(" ")
+            arr.append(info[0])
+            print(info[0])
+            line = line.replace(info[0], "")
+        action = IOCAction(arr[0],arr[1], arr[5],   arr[2],arr[3], arr[4], 10)
+        return action
+
+
+    def save(self,configfile):
+        file = open("CONFIGURE.txt", 'r+')
+        if file != None:
+        # slice off the last character from get, as an extra return is added
+            data = configfile.get('1.0', END+'-1c')
+            file.write(data)
+            file.close()
+
+    def client_exit(self):
+        exit()
+
+    def add_ioc(self, configfile,iocActions2):
+        newWindow = Toplevel(self)
+
+        
+        #display = Label(newWindow, text = "Add IOC")
+        #   display.pack()
+        v1 = StringVar()
+        v2 = StringVar()
+        v3 = StringVar()
+        v4 = StringVar()
+        v5 = StringVar()
+
+        # changing the title of our master widget      
+
+        w = Label(newWindow, text="ioc_type")
+        w.pack()
+        w.place(x=30,y=50)
+
+        e1 = Entry(newWindow, textvariable=v1)
+        e1.place(x=80,y=50)
+
+        w = Label(newWindow, text = "")
+        w.pack()
+
+        w = Label(newWindow, text="ioc_name")
+        w.pack()
+        w.place(x=30, y=70)
+        
+        e2 = Entry(newWindow,textvariable=v2)
+        e2.place(x=85, y=70)
+        
+        w = Label(newWindow, text = "")
+        w.pack()
+
+        w = Label(newWindow, text="asyn_port")
+        w.pack()
+        w.place(x=30,y=100)
+
+        e3 = Entry(newWindow,textvariable=v3)
+        e3.place(x=85, y=100)
+
+        w = Label(newWindow, text = "")
+        w.pack()
+
+        w = Label(newWindow, text="ioc_port")
+        w.pack()
+        w.place(x=30,y=130)
+
+        e4 = Entry(newWindow,textvariable=v4)
+        e4.place(x=95,y=130)
+
+        w = Label(newWindow, text = "")
+        w.pack()
+
+
+        w = Label(newWindow, text="connection")
+        w.pack()
+        w.place(x=30,y=160)
+
+        e5 = Entry(newWindow,textvariable=v5)
+        e5.place(x=95,y=160)
+
+        w = Label(newWindow, text = "")
+        w.pack()
+
+        submitButton = Button(newWindow,text="Submit", command=lambda: iocActions2.append(self.submit(configfile, v1, v2, v3, v4, v5, newWindow,iocActions2)))
+        submitButton.pack()
+        submitButton.place(x=0, y=0)
+        ##init_iocs()
+        if len(iocActions2) > 0:
+            return iocActions2.pop(0)
+        else:
+            return print("Error")
+
+
+
+
+    def submit(self, configfile, v1,v2,v3,v4,v5,newWindow,iocActions2s):
+        camera_info = v1.get() + "   " + v2.get() + "         " + v3.get() + "         " + v4.get() + "         " + v5.get()
+
+        if v1.get() ==  "" and v2.get() == "" and v3.get() == "" and v4.get() == "" and v5.get() == "":
+            
+            
+            popup = Tk()
+            popup.wm_title("Error")
+            new_display = Label(popup, text = "You have to fill everything in!!")
+            new_display.pack()
+            okay = Button(popup, text = "Okay", command = popup.destroy)
+            okay.pack()
+            popup.mainloop()
+            new_display.pack()
+            return print("Error")
+        elif v1.get() !=  "" and v2.get() != "" and v3.get() != "" and v4.get() != "" and v5.get() != "":
+
+            ##configfile.delete("1.0", END)
+            ##configfile.update()
+            configfile.insert(INSERT, "\n")
+            configfile.insert(INSERT, camera_info)
+            newWindow2 = Toplevel(self)
+            l1 = Label(newWindow2, text="Would you like to add a new IOC again?")
+            l1.pack()
+            action = self.iocActionMaker(camera_info)
+
+            yesButton = Button(newWindow2, text = "Yes")
+            yesButton.pack()
+            noButton = Button(newWindow2, text = "No", command=lambda: self.delete(newWindow,newWindow2))
+            noButton.pack()
+            return action
+        else:
+            popup = Tk()
+            popup.wm_title("Error")
+            new_display = Label(popup, text = "You have to fill everything in!!")
+            new_display.pack()
+            okay = Button(popup, text = "Okay", command = popup.destroy)
+            okay.pack()
+            popup.mainloop()
+            new_display.pack()
+            return print("Error")
+
+            
+        
+    def reAdd(self, newWindow2):
+        newWindow2.destroy()
+
+    
+    def delete(self, newWindow, newWindow2):
+        newWindow.destroy()
+        newWindow2.destroy()   
 
 def parse_args():
     parser = argparse.ArgumentParser(description='A script for auto-initializing areaDetector IOCs. Edit the CONFIGURE file and run without arguments for default operation.')
@@ -704,10 +1151,18 @@ def parse_args():
     if arguments['individual']:
         guided_init()
     elif arguments['gui']:
+        root = Tk()
+
+        root.geometry("1080x1080")
+
+        app = Window(root)
+        root.mainloop()
+
         print('The initIOC gui is not yet supported in version {} - Exiting'.format(version))
         exit()
     else:
         init_iocs()
+
 
 
 # Run the script
