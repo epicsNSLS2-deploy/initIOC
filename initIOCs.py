@@ -16,6 +16,12 @@ import subprocess
 import argparse
 from sys import platform
 
+WITH_GUI=True
+try:
+    from tkinter import *
+except ImportError:
+    WITH_GUI=False
+
 # version number
 version = "v0.0.4"
 
@@ -705,8 +711,12 @@ def parse_args():
     if arguments['individual']:
         guided_init()
     elif arguments['gui']:
-        print('The initIOC gui is not yet supported in version {} - Exiting'.format(version))
-        exit()
+        if not WITH_GUI:
+            print('ERROR - tkinter not found for your python3 distribution, required for GUI. Exiting...')
+            exit()
+        else:
+            print('GUI is not yet fully implemented.')
+            exit()
     else:
         init_iocs()
 
