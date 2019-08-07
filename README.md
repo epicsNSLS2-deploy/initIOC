@@ -28,7 +28,6 @@ Option | Description
 ---------|--------
 IOC_DIR | Location for iocs on the server. Usually `/epics/iocs`
 TOP_BINARY_DIR | Location of compiled epics base and support
-BINARIES_FLAT | Toggle that tells the script whether base and support are separated or if support modules are in the same directory as base. If using a prebuilt bundle, this will most likely need to be set to YES
 ENGINEER | The engineer deploying the IOC
 PREFIX | IOC PV Prefix for the camera. - Note that the script will attempt to autoassign a unique portion of the prefix
 HOSTNAME | Hostname of server on which the IOC is located
@@ -46,7 +45,9 @@ Option | Description
 ------|------------
 -h / --help | Prints help information
 -i / --individual | Gives you a guided process for initializing IOCs one at a time
--g / --gui | Starts the GUI version of initIOC - will be available in later versions
+-g / --gui | Starts the GUI version of initIOC
+
+**NOTE: as of v0.0.5, the GUI version of initIOC is available, along with the BINARIES_FLAT configuration setting being depracated.**
 
 ### Currently supported drivers
 

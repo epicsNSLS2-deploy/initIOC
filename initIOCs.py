@@ -24,13 +24,27 @@ try:
     from tkinter import messagebox
     from tkinter import simpledialog
     import tkinter.scrolledtext as ScrolledText
+    from tkinter import font as tkFont
+    from tkinter import ttk
+    import threading
+    import webbrowser
 except ImportError:
     WITH_GUI=False
+
+
+# variables used to allow for printing text to GUI or stdout depending on usage
+USING_GUI=False
+GUI_TOP_WINDOW=None
 
 # version number
 version = "v0.0.5"
 
-# Some constants
+
+#-------------------------------------------------
+#-------- CONSTANTS AND REQ. DATA STRUCTS --------
+#-------------------------------------------------
+
+
 KERNEL_PATH_LIMIT = 127
 
 supported_drivers = {
@@ -47,7 +61,6 @@ supported_drivers = {
     'ADURL'
 }
 
-
 config_tooltips = {
     'IOC_DIR' : 'Top level IOC output directory',
     'TOP_BINARY_DIR' : 'Location of compiled binaries on your system.',
@@ -57,6 +70,10 @@ config_tooltips = {
     'CA_ADDRESS' : 'Channel access address list IP'
 }
 
+
+#-------------------------------------------------
+#------------ INTERNAL DATA MODEL CLASS ----------
+#-------------------------------------------------
 
 class IOCAction:
     """
@@ -125,8 +142,8 @@ class IOCAction:
         self.ioc_port   = ioc_port
         self.connection = connection
         self.ioc_num    = ioc_num
-    
 
+    # TODO: Break this function up somewhat into smaller functions
     def process(self, ioc_top, bin_loc, bin_flat):
         """
         Function that clones ioc-template, and pulls correct st.cmd from startupScripts folder
@@ -143,27 +160,27 @@ class IOCAction:
 
         Returns
         -------
-        int
-            -1 if error, 0 if success
+        int, str
+            0, None if success, -1, message if error
         """
 
-        print("-------------------------------------------")
-        print("Setup process for IOC " + self.ioc_name)
-        print("-------------------------------------------")
+        initIOC_print("-------------------------------------------")
+        initIOC_print("Setup process for IOC " + self.ioc_name)
+        initIOC_print("-------------------------------------------")
         if os.path.exists(ioc_top + '/' + self.ioc_name):
-            print('ERROR - IOC with name {} already exists.'.format(self.ioc_name))
-            return -1
+            initIOC_print('ERROR - IOC with name {} already exists.'.format(self.ioc_name))
+            return -1, 'IOC {} already exists.'.format(self.ioc_name)
         binary_path =  self.getIOCBin(bin_loc, bin_flat) 
         if binary_path is None:
-            print('ERROR - Could not identify a compiled IOC binary for {}, skipping'.format(self.ioc_type))
-            print('Make sure that the binary exists and is compiled in the expected location, and make sure BINARIES_FLAT is correct.')
-            return -1
+            initIOC_print('ERROR - Could not identify a compiled IOC binary for {}, skipping'.format(self.ioc_type))
+            initIOC_print('Make sure that the binary exists and is compiled in the expected location, and make sure BINARIES_FLAT is correct.')
+            return -1, 'Could not identify executable for {}'.format(self.ioc_type)
         out = subprocess.call(["git", "clone", "--quiet", "https://github.com/epicsNSLS2-deploy/ioc-template", ioc_top + "/" + self.ioc_name])
         if out != 0:
-            print("Error failed to clone IOC template for ioc {}".format(self.ioc_name))
-            return -1
+            initIOC_print("Error failed to clone IOC template for ioc {}".format(self.ioc_name))
+            return -1, 'Git clone failed'
         else:
-            print("IOC template cloned, converting st.cmd")
+            initIOC_print("IOC template cloned, converting st.cmd")
             ioc_path = ioc_top +"/" + self.ioc_name
             os.remove(ioc_path+"/st.cmd")
 
@@ -185,7 +202,7 @@ class IOCAction:
                 st = open(ioc_path+"/st_base.cmd", "w+")
                 exe_written = True
             elif len(binary_path) > KERNEL_PATH_LIMIT:     # The path length limit for shebangs (#!/) on linux is usually kernel based and set to 127
-                print('WARNING - Path to executable exceeds legal bash limit, generating st.cmd and st_base.cmd')
+                initIOC_print('WARNING - Path to executable exceeds legal bash limit, generating st.cmd and st_base.cmd')
                 st_exe = open(ioc_path + '/st.cmd', 'w+')
                 st_exe.write(binary_path + ' st_base.cmd\n')
                 st = open(ioc_path+"/st_base.cmd", "w+")
@@ -213,20 +230,20 @@ class IOCAction:
             autosave_path = ioc_path + "/autosaveFiles"
             autosave_type = self.ioc_type[2:].lower()
             if os.path.exists(autosave_path + "/" + autosave_type + "_auto_settings.req"):
-                print("Generating auto_settings.req file for IOC {}.".format(self.ioc_name))
+                initIOC_print("Generating auto_settings.req file for IOC {}.".format(self.ioc_name))
                 os.rename(autosave_path + "/" + autosave_type + "_auto_settings.req", ioc_path + "/auto_settings.req")
             else:
-                print("Could not find supported auto_settings.req file for IOC {}.".format(self.ioc_name))
+                initIOC_print("Could not find supported auto_settings.req file for IOC {}.".format(self.ioc_name))
 
             if os.path.exists(ioc_path + "/dependancyFiles"):
                 for file in os.listdir(ioc_path + "/dependancyFiles"):
                     if file.lower().startswith(startup_type):
-                        print('Copying dependency file {} for {}'.format(file, self.ioc_type))
+                        initIOC_print('Copying dependency file {} for {}'.format(file, self.ioc_type))
                         # Copy all required dependency files
                         os.rename(ioc_path + "/dependancyFiles/" + file, ioc_path + "/" + file.split('_', 1)[-1])
                         self.fix_macros(ioc_path + '/' + file.split('_', 1)[-1])
 
-            return 0
+            return 0, None
 
 
     def update_unique(self, ioc_top, bin_loc, bin_flat, prefix, engineer, hostname, ca_ip):
@@ -252,7 +269,7 @@ class IOCAction:
         """
 
         if os.path.exists(ioc_top + "/" + self.ioc_name +"/unique.cmd"):
-            print("Updating unique file based on configuration")
+            initIOC_print("Updating unique file based on configuration")
             unique_path = ioc_top + "/" + self.ioc_name +"/unique.cmd"
             unique_old_path = ioc_top +"/" + self.ioc_name +"/unique_OLD.cmd"
             os.rename(unique_path, unique_old_path)
@@ -294,7 +311,7 @@ class IOCAction:
             uq_old.close()
             uq.close()
         else:
-            print("No unique file found, proceeding to next step")
+            initIOC_print("No unique file found, proceeding to next step")
 
 
     def update_config(self, ioc_top, hostname):
@@ -311,7 +328,7 @@ class IOCAction:
 
         conf_path = ioc_top + "/" + self.ioc_name + "/config"
         if os.path.exists(conf_path):
-            print("Updating config file for procServer connection")
+            initIOC_print("Updating config file for procServer connection")
             conf_old_path = ioc_top + "/" + self.ioc_name + "/config_OLD"
             os.rename(conf_path, conf_old_path)
             cn_old = open(conf_old_path, "r")
@@ -330,7 +347,7 @@ class IOCAction:
             cn_old.close()
             cn.close()
         else:
-            print("No config file found moving to next step")
+            initIOC_print("No config file found moving to next step")
 
 
     def fix_env_paths(self, ioc_top, bin_flat):
@@ -359,7 +376,7 @@ class IOCAction:
                     else:
                         env.write('epicsEnvSet("ARCH",       "linux-x86_64")\n')
                 elif "EPICS_BASE" in line and not bin_flat:
-                    print("Fixing base location in envPaths")
+                    initIOC_print("Fixing base location in envPaths")
                     env.write('epicsEnvSet("EPICS_BASE", "$(SUPPORT)/../base")\n')
                 else:
                     env.write(line)
@@ -441,6 +458,7 @@ class IOCAction:
         os.remove(file_path+'_OLD')
 
 
+    # TODO: need to include support/lib/arch. shouldn't include all ADDrivers, just IOC type
     def create_path_scripts(self, bin_loc, bin_flat, ioc_top):
         """
         Function that attempts to create scripts for setting the dev environment for the IOC given the location of the binaries.
@@ -498,6 +516,7 @@ class IOCAction:
         path_file.close()
 
 
+    # TODO: change so that script is removed by initIOC instead of itself to fix error on windows
     def cleanup(self, ioc_top):
         """ Function that runs the cleanup.sh/cleanup.bat script in ioc-template to remove unwanted files """
 
@@ -505,20 +524,20 @@ class IOCAction:
 
         if platform == "win32":
             if(os.path.exists(ioc_top + "/" + self.ioc_name + "/cleanup.bat")):
-                print("Performing cleanup for {}".format(self.ioc_name))
+                initIOC_print("Performing cleanup for {}".format(self.ioc_name))
                 out = subprocess.call([ioc_top + "/" + self.ioc_name + "/cleanup.bat"])
-                print()
+                initIOC_print('')
                 cleanup_completed = True
         else:
             if(os.path.exists(ioc_top + "/" + self.ioc_name + "/cleanup.sh")):
-                print("Performing cleanup for {}".format(self.ioc_name))
+                initIOC_print("Performing cleanup for {}".format(self.ioc_name))
                 out = subprocess.call(["bash", ioc_top + "/" + self.ioc_name + "/cleanup.sh"])
-                print()
+                initIOC_print('')
                 cleanup_completed = True
         if os.path.exists(ioc_top +"/" + self.ioc_name + "/st.cmd"):
             os.chmod(ioc_top +"/" + self.ioc_name + "/st.cmd", 0o755)
         if not cleanup_completed:
-            print("No cleanup script found, using outdated version of IOC template")
+            initIOC_print("No cleanup script found, using outdated version of IOC template")
 
 
 #-------------------------------------------------
@@ -540,7 +559,7 @@ def parse_line_into_action(line, prefix, ioc_num_counter):
     Returns
     -------
     ioc_action : IOCAction
-        the IOCAction object that contains information parsed from the line
+        the IOCAction object that contains information from line or None if it cannot successfully be parsed
     """
 
     try:
@@ -551,7 +570,7 @@ def parse_line_into_action(line, prefix, ioc_num_counter):
         ioc_action = IOCAction(temp[0], temp[1], prefix, temp[2], temp[3], temp[4], ioc_num_counter)
         return ioc_action
     except IndexError:
-        print('IOC line could not be parsed, skipping...')
+        initIOC_print('IOC line could not be parsed, skipping...')
         return None
 
 
@@ -605,38 +624,49 @@ def init_ioc_dir(ioc_top):
     ----------
     ioc_top : str
         Path to the top directory to contain generated IOCs
+
+    Return
+    ------
+    bool
+        True if already exists, or succesfully created, otherwise false
     """
 
-    if ioc_top == "":
-        print("Error: IOC top not initialized")
-        exit()
+    if ioc_top == '':
+        initIOC_print('ERROR - IOC top directory not initialized')
+        return False
     elif os.path.exists(ioc_top) and os.path.isdir(ioc_top):
-        print("IOC Dir already exits.")
-        print()
+        initIOC_print("IOC directory already exits.")
+        initIOC_print('')
+        return True
     else:
-        os.mkdir(ioc_top)
+        try:
+            os.mkdir(ioc_top)
+            return True
+        except PermissionError:
+            initIOC_print('ERROR - Permission denied when creating IOC directory.')
+            return False
 
 
 def print_start_message():
     """ Function for printing initial message """
 
-    print("+----------------------------------------------------------------+")
-    print("+ initIOCs, Version: " + version +"                                      +")
-    print("+ Author: Jakub Wlodek                                           +")
-    print("+ Copyright (c): Brookhaven National Laboratory 2018-2019        +")
-    print("+ This software comes with NO warranty!                          +")
-    print("+----------------------------------------------------------------+")
-    print()
+    initIOC_print("+----------------------------------------------------------------+")
+    initIOC_print("+ initIOCs, Version: " + version +"                                      +")
+    initIOC_print("+ Author: Jakub Wlodek                                           +")
+    initIOC_print("+ Copyright (c): Brookhaven National Laboratory 2018-2019        +")
+    initIOC_print("+ This software comes with NO warranty!                          +")
+    initIOC_print("+----------------------------------------------------------------+")
+    initIOC_print('')
 
 
 def print_supported_drivers():
     """ Function that prints list of supported drivers """
 
-    print('Supported Drivers:')
-    print("+-----------------------------+")
+    initIOC_print('Supported Drivers:')
+    initIOC_print("+-----------------------------+")
     for driver in supported_drivers:
-        print('+ {}'.format(driver))
-    print()
+        initIOC_print('+ {}'.format(driver))
+    initIOC_print('')
 
 
 def execute_ioc_action(action, configuration, bin_flat):
@@ -654,7 +684,7 @@ def execute_ioc_action(action, configuration, bin_flat):
     """
 
     # Perform the overall process action
-    out = action.process(configuration["IOC_DIR"], configuration["TOP_BINARY_DIR"], bin_flat)
+    out, message = action.process(configuration["IOC_DIR"], configuration["TOP_BINARY_DIR"], bin_flat)
     # if successfull, update any remaining required files
     if out == 0:
         action.update_unique(configuration["IOC_DIR"], configuration["TOP_BINARY_DIR"], bin_flat, 
@@ -664,23 +694,24 @@ def execute_ioc_action(action, configuration, bin_flat):
         action.fix_env_paths(configuration["IOC_DIR"], bin_flat)
         action.create_path_scripts(configuration["TOP_BINARY_DIR"], bin_flat, configuration["IOC_DIR"])
         action.cleanup(configuration["IOC_DIR"])
+    return out, message
 
 
 def guided_init():
     """ Function that guides the user through generating a single IOC through the CLI """
 
     print_start_message()
-    print('Welcome to initIOC!')
+    initIOC_print('Welcome to initIOC!')
     configuration = {}
-    configuration['IOC_DIR'] = input('Enter the ioc output location. > ')
+    configuration['IOC_DIR']        = input('Enter the ioc output location. > ')
     configuration['TOP_BINARY_DIR'] = input('Enter the location of your compiled binaries. > ')
     bin_flat = True
     if os.path.exists(configuration['TOP_BINARY_DIR']):
         if os.path.exists(os.path.join(configuration['TOP_BINARY_DIR'], 'support')):
             bin_flat = False
-    configuration['PREFIX'] = input('Enter the IOC Prefix (without the camera specific portion ex. XF:10IDC-BI). > ')
-    configuration['HOSTNAME'] = input('Enter the IOC server hostname. > ')
-    configuration['ENGINEER'] = input('Enter your name and contact information. > ')
+    configuration['PREFIX']     = input('Enter the IOC Prefix (without the camera specific portion ex. XF:10IDC-BI). > ')
+    configuration['HOSTNAME']   = input('Enter the IOC server hostname. > ')
+    configuration['ENGINEER']   = input('Enter your name and contact information. > ')
     configuration['CA_ADDRESS'] = input('Enter the CA_ADDRESS IP. > ')
     another_ioc = True
     while another_ioc:
@@ -689,18 +720,20 @@ def guided_init():
             driver_type = input('What driver type would you like to generate? > ')
             if driver_type not in supported_drivers:
                 driver_type = None
-                print('The selected driver type is not supported. See list of supported drivers below.')
+                initIOC_print('The selected driver type is not supported. See list of supported drivers below.')
                 print_supported_drivers()
         ioc_name = input('What should the IOC name be? > ')
         asyn_port = input('What asyn port should the IOC use? (ex. PS1). > ')
         ioc_port = input('What telnet port should procServer use to run the IOC? > ')
         connection = input('Enter the connection param for your device. (ex. IP, serial number etc.) enter NA if not sure. > ')
         ioc_action = IOCAction(driver_type, ioc_name, configuration['PREFIX'], asyn_port, ioc_port, connection, 1)
-        execute_ioc_action(ioc_action, configuration, bin_flat)
+        out, message = execute_ioc_action(ioc_action, configuration, bin_flat)
+        if out < 0:
+            initIOC_print('IOC generation failed - {}'.format(message))
         another = input('Would you like to generate another IOC? (y/n). > ')
         if another != 'y':
             another_ioc = False
-    print('Done.')
+    initIOC_print('Done.')
 
 
 def init_iocs_cli():
@@ -714,7 +747,7 @@ def init_iocs_cli():
     init_iocs(actions, configuration, bin_flat)
 
 
-def init_iocs(actions, configuration, bin_flat):
+def init_iocs(actions, configuration, bin_flat, is_gui = False):
     """
     Main driver function. Recieves actions, the configuration, and bin_flat toggle
 
@@ -728,15 +761,34 @@ def init_iocs(actions, configuration, bin_flat):
         a boolean toggle for if binary structure is flat or not.
     """
 
-    init_ioc_dir(configuration["IOC_DIR"])
-    for action in actions:
-        if action.ioc_type not in supported_drivers:
-            print('ERROR - {} is not currently a supported driver!'.format(action.ioc_type))
-            print_supported_drivers()
-            print('To request support for {} to be added to initIOC, please create an issue on:'.format(action.ioc_type))
-            print('https://github.com/epicsNSLS2-deploy/initIOC/issues')
-        else:
-            execute_ioc_action(action, configuration, bin_flat)
+    ret = init_ioc_dir(configuration["IOC_DIR"])
+    if ret:
+        if len(actions) == 0:
+            initIOC_print('No IOCs detected in table.')
+        for action in actions:
+            if action.ioc_type not in supported_drivers:
+                initIOC_print('ERROR - {} is not currently a supported driver!'.format(action.ioc_type))
+                print_supported_drivers()
+                initIOC_print('To request support for {} to be added to initIOC, please create an issue on:'.format(action.ioc_type))
+                initIOC_print('https://github.com/epicsNSLS2-deploy/initIOC/issues')
+            else:
+                execute_ioc_action(action, configuration, bin_flat)
+
+
+def initIOC_print(text):
+    """
+    A wrapper function for 'print' that allows for printing to CLI or to log
+    """
+
+    if USING_GUI and GUI_TOP_WINDOW is not None:
+        GUI_TOP_WINDOW.writeToLog(text + '\n')
+    else:
+        print(text)
+
+
+#-------------------------------------------------
+#---------------- MAIN GUI CLASSES ---------------
+#-------------------------------------------------
 
 
 class ToolTip(object):
@@ -813,7 +865,7 @@ def CreateToolTip(widget, text):
     widget.bind('<Leave>', leave)
 
 
-class InitIOCGui(Frame):
+class InitIOCGui:
     """
     Class representing the main GUI for initIOCs.
 
@@ -849,16 +901,52 @@ class InitIOCGui(Frame):
 
         self.master = master
 
+
+        self.master.protocol('WM_DELETE_WINDOW', self.thread_cleanup)
         self.frame = Frame(self.master)
         self.frame.pack()
 
+        self.largeFont = tkFont.Font(size = 12)
+        self.largeFontU = tkFont.Font(size = 12)
+        self.largeFontU.configure(underline = True)
+
+        self.showPopups = BooleanVar()
+        self.showPopups.set(True)
+        self.askAnother = BooleanVar()
+        self.askAnother.set(False)
+
         self.ioc_num_counter = 1
+        self.executionThread = threading.Thread()
 
-        self.initWindow()
+        menubar = Menu(self.master)
 
+        filemenu = Menu(menubar, tearoff=0)
+        filemenu.add_command(label='Save Configuration',    command=self.save)
+        filemenu.add_command(label='Save Log',              command=self.saveLog)
+        filemenu.add_command(label='Clear Log',             command=self.clearLog)
+        filemenu.add_command(label='Exit',                  command=self.thread_cleanup)
+        menubar.add_cascade(label='File', menu=filemenu)
 
-    def initWindow(self):
-        """ Function that initializes the output window """
+        editmenu = Menu(menubar, tearoff=0)
+        editmenu.add_command(label='Add IOC', command=self.openAddIOCWindow)
+        editmenu.add_command(label='Clear IOC table', command=self.initIOCPanel)
+        editmenu.add_checkbutton(label='Toggle Popups', onvalue=True, offvalue=False, variable=self.showPopups)
+        editmenu.add_checkbutton(label='Ask to Add Multiple IOCs', onvalue=True, offvalue=False, variable=self.askAnother)
+        menubar.add_cascade(label='Edit', menu=editmenu)
+
+        runmenu = Menu(menubar, tearoff=0)
+        runmenu.add_command(label='Generate IOCs', command=self.execute)
+        menubar.add_cascade(label='Run', menu=runmenu)
+
+        helpmenu = Menu(menubar, tearoff=0)
+        helpmenu.add_command(label='Online Docs', command=lambda: webbrowser.open('https://epicsnsls2-deploy.github.io/Deploy-Docs/#initIOC-step-by-step-example', new=2))
+        helpmenu.add_command(label='initIOC on Github', command = lambda: webbrowser.open('https://github.com/epicsNSLS2-deploy/initIOC', new=2))
+        helpmenu.add_command(label='Report an Issue', command = lambda: webbrowser.open('https://github.com/epicsNSLS2-deploy/initIOC/issues', new=2))
+        helpmenu.add_command(label='Supported Drivers', command=print_supported_drivers)
+        helpmenu.add_command(label = 'About', command=print_start_message)
+        menubar.add_cascade(label='Help', menu=helpmenu)
+
+        self.master.config(menu=menubar)
 
         # Read initial configuration from save file
         self.actions, self.configuration, self.bin_flat = read_ioc_config()
@@ -878,23 +966,67 @@ class InitIOCGui(Frame):
         
         self.master.title('initIOC GUI')
 
-        saveButton  = Button(self.frame, text="Save",     command=self.save).grid(row = row_counter, column = 0, padx = 10, pady=10)
-        runButton   = Button(self.frame, text="Run",      command=self.execute).grid(row = row_counter, column = 1, padx = 10, pady=10)
-        addButton   = Button(self.frame, text="Add IOC",  command=self.openAddIOCWindow).grid(row = row_counter, column = 2, padx = 10, pady=10)
+        ttk.Separator(self.frame, orient=HORIZONTAL).grid(row=row_counter, columnspan=3, padx = 5, sticky = 'ew')
 
         Label(self.frame, text='IOC Generation Table - You may edit this table manually, or add new IOCs with the Add Button').grid(row = 0, column = 3, columnspan = 5, padx = 10, pady = 10)
-        self.iocPanel = ScrolledText.ScrolledText(self.frame, width = '85', height = '20')
-        self.iocPanel.grid(row = 1, column = 3, padx = 15, pady = 15, columnspan = 5, rowspan = row_counter)
-        self.iocPanel.insert(INSERT, '# IOC Type        IOC Name     Asyn Port      IOC Port      Cam Connection\n')
-        self.iocPanel.insert(INSERT, '#-------------------------------------------------------------------------\n')
+        self.iocPanel = ScrolledText.ScrolledText(self.frame, width = '75', height = '15')
+        self.iocPanel.grid(row = 1, column = 3, padx = 15, pady = 15, columnspan = 5, rowspan = row_counter + 1)
+        self.initIOCPanel()
         for action in self.actions:
             self.writeToIOCPanel(action.ioc_type, action.ioc_name, action.asyn_port, action.ioc_port, action.connection)
+
+        Label(self.frame, text='Log', font=self.largeFontU).grid(row = row_counter + 1, column = 0, padx = 5, pady = 0)
+        self.logPanel = ScrolledText.ScrolledText(self.frame, width='100', height = '15')
+        self.logPanel.grid(row = row_counter + 2, column = 0, rowspan = 5, columnspan = 4, padx = 10, pady = 10)
+
+        saveButton  = Button(self.frame, text="Save",     font=self.largeFont, command=self.save,                height='3', width='20')
+        runButton   = Button(self.frame, text="Run",      font=self.largeFont, command=self.execute,             height='3', width='20')
+        addButton   = Button(self.frame, text="Add IOC",  font=self.largeFont, command=self.openAddIOCWindow,    height='3', width='20')
+        saveButton.grid(row=row_counter+3, column=5, columnspan=2, padx=5, pady=5)
+        runButton.grid( row=row_counter+4, column=5, columnspan=2, padx=5, pady=5)
+        addButton.grid( row=row_counter+5, column=5, columnspan=2, padx=5, pady=5)
+
+
+    def initIOCPanel(self):
+        """ Function that resets the IOC panel """
+
+        self.iocPanel.delete('1.0', END)
+        self.iocPanel.insert(INSERT, '# IOC Type        IOC Name     Asyn Port      IOC Port      Cam Connection\n')
+        self.iocPanel.insert(INSERT, '#-------------------------------------------------------------------------\n')
 
 
     def writeToIOCPanel(self, ioc_type, name, asyn, port, connect):
         """ Function that writes to the iocPanel """
 
-        self.iocPanel.insert(INSERT, '{:<18}{:<15}{:<15}{:<17}{}\n'.format(ioc_type, name, asyn, port, connect))
+        self.iocPanel.insert(INSERT, '{:<18}{:<15}{:<15}{:<12}{}\n'.format(ioc_type, name, asyn, port, connect))
+
+
+    def writeToLog(self, text):
+        """ Function that writes text to the GUI log """
+
+        self.logPanel.insert(INSERT, text)
+        self.logPanel.see(END)
+
+
+    def showError(self, text):
+
+        if self.showPopups.get():
+            messagebox.showerror('ERROR', text)
+        self.writeToLog('ERROR - ' + text + '\n')
+
+
+    def showWarning(self, text):
+
+        if self.showPopups.get():
+            messagebox.showerror('WARNING', text)
+        self.writeToLog('WARNING - ' + text + '\n')
+
+
+    def showMessage(self, text):
+
+        if self.showPopups.get():
+            messagebox.showerror('Info', text)
+        self.writeToLog(text + '\n')
 
 
     def read_gui_config(self):
@@ -917,19 +1049,22 @@ class InitIOCGui(Frame):
                     self.actions.append(action)
                     self.ioc_num_counter = self.ioc_num_counter + 1
                 else:
-                    messagebox.showwarning('Parse Error', 'Could not parse one of the IOC lines entered into the table.')
+                    self.showWarning('Could not parse one of the IOC lines entered into the table.')
 
 
     def execute(self):
         """ Reads gui info, and runs init_iocs """
 
-        self.read_gui_config()
-        init_iocs(self.actions, self.configuration, self.bin_flat)
-        messagebox.showinfo('IOCs Generated', 'IOCs have been generated successfully in {}'.format(self.configuration['IOC_DIR']))
+        if self.executionThread.is_alive():
+            self.showError('Process thread is already active!')
+        else:
+           self.read_gui_config()
+           self.executionThread = threading.Thread(target=lambda: init_iocs(self.actions, self.configuration, self.bin_flat))
+           self.executionThread.start()
 
 
     def save(self):
-        """ Saves the current IOC directory """
+        """ Saves the current IOC configuration """
 
         self.read_gui_config()
         if os.path.exists('CONFIGURE'):
@@ -941,13 +1076,39 @@ class InitIOCGui(Frame):
             file.write('{}={}\n\n'.format(elem, self.configuration[elem]))
 
         file.write(self.iocPanel.get('1.0', END))
-        messagebox.showinfo('Saved', 'Saved configuration to CONFIGURE file.')
+        self.showInfo('Saved configuration to CONFIGURE file.')
+
+
+    def saveLog(self):
+        """ Function that saves the current log into a log file """
+
+        if not os.path.exists('logs'):
+            os.mkdir('logs')
+        elif not os.path.isdir('logs'):
+            self.showError('logs directory could not be created, logs file exists')
+        log = open('logs/initIOC-{}.log'.format(datetime.datetime.now()), 'w')
+        log.write(self.logPanel.get('1.0', END))
+        log.close()
+        self.writeToLog('Wrote log file.\n')
+
+
+    def clearLog(self):
+        """ Reinitializes the log """
+
+        self.logPanel.delete('1.0', END)
+        print_start_message()
 
 
     def openAddIOCWindow(self):
         """ Opens an addIOC window """
 
-        window = AddIOCWindow(self)
+        AddIOCWindow(self)
+
+
+    def thread_cleanup(self):
+        if self.executionThread.is_alive():
+            self.executionThread.join()
+        self.master.destroy()
 
 
 class AddIOCWindow:
@@ -969,29 +1130,39 @@ class AddIOCWindow:
         self.cam_connect_var    = StringVar()  
 
         ioc_type_label      = Label(self.master, text="IOC Type").grid(row = 0, column = 0, padx = 10, pady = 10)
-        ioc_type_entry      = Entry(self.master, textvariable=self.ioc_type_var).grid(row = 0, column = 1, columnspan=2, padx = 10, pady = 10)
+        ioc_type_entry      = Entry(self.master, textvariable=self.ioc_type_var)
+        ioc_type_entry.grid(row = 0, column = 1, columnspan=2, padx = 10, pady = 10)
+        CreateToolTip(ioc_type_entry, 'The IOC type. Must be from list of supported drivers.')
 
         ioc_name_label      = Label(self.master, text="IOC Name").grid(row = 1, column = 0, padx = 10, pady = 10)
-        ioc_name_entry      = Entry(self.master, textvariable=self.ioc_name_var).grid(row = 1, column = 1, columnspan=2, padx = 10, pady = 10)
+        ioc_name_entry      = Entry(self.master, textvariable=self.ioc_name_var)
+        ioc_name_entry.grid(row = 1, column = 1, columnspan=2, padx = 10, pady = 10)
+        CreateToolTip(ioc_name_entry, 'The name of the IOC. Usually cam-$NAME')
 
         asyn_port_label     = Label(self.master, text="Asyn Port").grid(row = 2, column = 0, padx = 10, pady = 10)
-        asyn_port_entry     = Entry(self.master, textvariable=self.asyn_port_var).grid(row = 2, column = 1, columnspan=2, padx = 10, pady = 10)
+        asyn_port_entry     = Entry(self.master, textvariable=self.asyn_port_var)
+        asyn_port_entry.grid(row = 2, column = 1, columnspan=2, padx = 10, pady = 10)
+        CreateToolTip(asyn_port_entry, 'IOC Asyn port. Usually Shorthand of IOC type and number. ex. SIM1')
 
         ioc_port_label      = Label(self.master, text="IOC Port").grid(row = 3, column = 0, padx = 10, pady = 10)
-        ioc_port_entry      = Entry(self.master, textvariable=self.ioc_port_var).grid(row = 3, column = 1, columnspan=2, padx = 10, pady = 10)
+        ioc_port_entry      = Entry(self.master, textvariable=self.ioc_port_var)
+        ioc_port_entry.grid(row = 3, column = 1, columnspan=2, padx = 10, pady = 10)
+        CreateToolTip(ioc_port_entry, 'Telnet port used by softioc when running the IOC')
 
         cam_connect_label   = Label(self.master, text="Cam Connection").grid(row = 4, column = 0, padx = 10, pady = 10)
-        cam_connect_entry   = Entry(self.master, textvariable=self.cam_connect_var).grid(row = 4, column = 1, columnspan=2, padx = 10, pady = 10)
+        cam_connect_entry   = Entry(self.master, textvariable=self.cam_connect_var)
+        cam_connect_entry.grid(row = 4, column = 1, columnspan=2, padx = 10, pady = 10)
+        CreateToolTip(cam_connect_entry, 'A general parameter used to connect to camera. Typically IP, Serial #, config path, etc.')
 
-        submitButton = Button(self.master,text="Submit", command=self.submit).grid(row = 5, column = 0, padx = 10, pady = 10)
-        cancelButton = Button(self.master,text="Cancel", command=self.master.destroy).grid(row = 5, column = 2, padx = 10, pady = 10)
+        Button(self.master,text="Submit", command=self.submit).grid(row = 5, column = 0, padx = 10, pady = 10)
+        Button(self.master,text="Cancel", command=self.master.destroy).grid(row = 5, column = 2, padx = 10, pady = 10)
 
 
     def submit(self):
         """ Function that enters the filled IOC values into the configuration """
 
         if self.ioc_type_var.get() not in supported_drivers:
-            messagebox.showerror('Not Supported', 'The selected IOC type is not supported.')
+            self.root.showError('The selected IOC type is not supported.')
             self.master.destroy()
             return
 
@@ -1001,20 +1172,24 @@ class AddIOCWindow:
         port = self.ioc_port_var.get()
         connect = self.cam_connect_var.get()
         if ioc_type == '' or name == '' or asyn == '' or port == '' or connect == '':
-            messagebox.showerror('Not filled', 'Please enter a valid value for all of the fields.')
+            self.root.showError('Please enter a valid value for all of the fields.')
             return
 
         self.root.writeToIOCPanel(ioc_type, name, asyn, port, connect)
+        self.root.writeToLog('Added IOC {} to configuration.\n'.format(name))
 
-        res = messagebox.askyesno('Continue', 'Would you like to add another IOC?')
-        if res is not None and not res:
+        if self.root.askAnother.get():
+            res = messagebox.askyesno('Continue', 'Would you like to add another IOC?')
+            if res is not None and not res:
+                self.master.destroy()
+            elif res is not None:
+                self.ioc_name_var.set('')
+                self.ioc_type_var.set('')
+                self.ioc_port_var.set('')
+                self.asyn_port_var.set('')
+                self.cam_connect_var.set('')
+        else:
             self.master.destroy()
-        elif res is not None:
-            self.ioc_name_var.set('')
-            self.ioc_type_var.set('')
-            self.ioc_port_var.set('')
-            self.asyn_port_var.set('')
-            self.cam_connect_var.set('')
 
 
 
@@ -1022,24 +1197,36 @@ class AddIOCWindow:
 def parse_args():
     """ Main driver function that parses the command line arguments """
 
+    global GUI_TOP_WINDOW
+    global USING_GUI
+
     parser = argparse.ArgumentParser(description='A script for auto-initializing areaDetector IOCs. Edit the CONFIGURE file and run without arguments for default operation.')
 
-    parser.add_argument('-i', '--individual', action='store_true', help='Add this flag to go through a guided process for generating a single IOC at a time.')
-    parser.add_argument('-g', '--gui', action='store_true', help='Add this flag to enable the GUI version of initIOC.')
+    parser.add_argument('-i', '--individual',   action='store_true', help='Add this flag to go through a guided process for generating a single IOC at a time.')
+    parser.add_argument('-g', '--gui',          action='store_true', help='Add this flag to enable the GUI version of initIOC.')
     arguments = vars(parser.parse_args())
     if arguments['individual']:
+        # If user selects a guided init, perform that
         guided_init()
     elif arguments['gui']:
+        # otherwise if user selects GUI, open it provided all required imports went through
         if not WITH_GUI:
-            print('ERROR - tkinter not found for your python3 distribution, required for GUI. Exiting...')
+            print('ERROR - tkinter not found for your python3 distribution, required for GUI.')
+            print('Please either install tkinter or use the command line option for initIOC.')
+            print('Exiting...')
             exit()
         else:
             root = Tk()
 
+            USING_GUI = True
             app = InitIOCGui(root)
+            
+            GUI_TOP_WINDOW = app
+            print_start_message()
             root.mainloop()
 
     else:
+        # Otherwise perform default initIOCs through the CLI
         init_iocs_cli()
 
 
