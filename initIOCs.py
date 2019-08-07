@@ -160,8 +160,8 @@ class IOCAction:
 
         Returns
         -------
-        int, str
-            0, None if success, -1, message if error
+        int
+            0 if success, -1 if error
         """
 
         initIOC_print("-------------------------------------------")
@@ -169,16 +169,16 @@ class IOCAction:
         initIOC_print("-------------------------------------------")
         if os.path.exists(ioc_top + '/' + self.ioc_name):
             initIOC_print('ERROR - IOC with name {} already exists.'.format(self.ioc_name))
-            return -1, 'IOC {} already exists.'.format(self.ioc_name)
+            return -1
         binary_path =  self.getIOCBin(bin_loc, bin_flat) 
         if binary_path is None:
             initIOC_print('ERROR - Could not identify a compiled IOC binary for {}, skipping'.format(self.ioc_type))
             initIOC_print('Make sure that the binary exists and is compiled in the expected location, and make sure BINARIES_FLAT is correct.')
-            return -1, 'Could not identify executable for {}'.format(self.ioc_type)
+            return -1
         out = subprocess.call(["git", "clone", "--quiet", "https://github.com/epicsNSLS2-deploy/ioc-template", ioc_top + "/" + self.ioc_name])
         if out != 0:
             initIOC_print("Error failed to clone IOC template for ioc {}".format(self.ioc_name))
-            return -1, 'Git clone failed'
+            return -1
         else:
             initIOC_print("IOC template cloned, converting st.cmd")
             ioc_path = ioc_top +"/" + self.ioc_name
@@ -243,7 +243,7 @@ class IOCAction:
                         os.rename(ioc_path + "/dependancyFiles/" + file, ioc_path + "/" + file.split('_', 1)[-1])
                         self.fix_macros(ioc_path + '/' + file.split('_', 1)[-1])
 
-            return 0, None
+            return 0
 
 
     def update_unique(self, ioc_top, bin_loc, bin_flat, prefix, engineer, hostname, ca_ip):
@@ -684,7 +684,7 @@ def execute_ioc_action(action, configuration, bin_flat):
     """
 
     # Perform the overall process action
-    out, message = action.process(configuration["IOC_DIR"], configuration["TOP_BINARY_DIR"], bin_flat)
+    out = action.process(configuration["IOC_DIR"], configuration["TOP_BINARY_DIR"], bin_flat)
     # if successfull, update any remaining required files
     if out == 0:
         action.update_unique(configuration["IOC_DIR"], configuration["TOP_BINARY_DIR"], bin_flat, 
@@ -694,7 +694,6 @@ def execute_ioc_action(action, configuration, bin_flat):
         action.fix_env_paths(configuration["IOC_DIR"], bin_flat)
         action.create_path_scripts(configuration["TOP_BINARY_DIR"], bin_flat, configuration["IOC_DIR"])
         action.cleanup(configuration["IOC_DIR"])
-    return out, message
 
 
 def guided_init():
@@ -727,9 +726,7 @@ def guided_init():
         ioc_port = input('What telnet port should procServer use to run the IOC? > ')
         connection = input('Enter the connection param for your device. (ex. IP, serial number etc.) enter NA if not sure. > ')
         ioc_action = IOCAction(driver_type, ioc_name, configuration['PREFIX'], asyn_port, ioc_port, connection, 1)
-        out, message = execute_ioc_action(ioc_action, configuration, bin_flat)
-        if out < 0:
-            initIOC_print('IOC generation failed - {}'.format(message))
+        execute_ioc_action(ioc_action, configuration, bin_flat)
         another = input('Would you like to generate another IOC? (y/n). > ')
         if another != 'y':
             another_ioc = False
