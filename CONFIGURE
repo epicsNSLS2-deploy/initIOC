@@ -7,11 +7,11 @@
 #
 
 # Top Level IOC directory (Where all your IOCs will be located)
-IOC_DIR=./testiocs
+IOC_DIR=/epics/iocs
 
 
 # Top Level dir containing compiled binaries.
-TOP_BINARY_DIR=/home/jwlodek/Documents/epics/prod
+TOP_BINARY_DIR=/ad-nfs/epics/prod/Deb9/R3-6
 
 
 # All Camera PVs will be $Prefix{$(IOC Type)-Cam:#}
