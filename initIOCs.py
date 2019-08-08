@@ -1126,6 +1126,7 @@ class AddIOCWindow:
         self.ioc_port_var       = StringVar()
         self.cam_connect_var    = StringVar()  
 
+        # TODO: Change this IOC type to a dropdown menu.
         ioc_type_label      = Label(self.master, text="IOC Type").grid(row = 0, column = 0, padx = 10, pady = 10)
         ioc_type_entry      = Entry(self.master, textvariable=self.ioc_type_var)
         ioc_type_entry.grid(row = 0, column = 1, columnspan=2, padx = 10, pady = 10)
