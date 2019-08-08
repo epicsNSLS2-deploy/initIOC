@@ -49,6 +49,13 @@ Option | Description
 
 **NOTE: as of v0.0.5, the GUI version of initIOC is available, along with the BINARIES_FLAT configuration setting being depracated.**
 
+### GUI Usage
+
+The Graphic User Interface (GUI) allows the user to run initIOCs in a simpler graphical environment. All configure options are displayed as text fields, along with a log and the IOC table. To add an IOC to the table,
+you may enter it manually, or click the Add IOC button, and fill in the fields. You may save the configuration with the Save button, or execute the configuration with the Run button.
+
+Additional settings are available in the menubar. From there you may toggle popups, toggle prompts asking if you wish to add another IOC, clear the log and the IOC table, and more.
+
 ### Currently supported drivers
 
 initIOCs.py relies on [ioc-template](https://github.com/epicsNSLS2-deploy/ioc-template) to deploy its IOCs, and as a result, IOC support is limited to those drivers that have startup scripts located in `ioc-template`. Currently this includes:
