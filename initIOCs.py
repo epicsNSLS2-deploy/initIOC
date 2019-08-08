@@ -516,28 +516,29 @@ class IOCAction:
         path_file.close()
 
 
-    # TODO: change so that script is removed by initIOC instead of itself to fix error on windows
     def cleanup(self, ioc_top):
         """ Function that runs the cleanup.sh/cleanup.bat script in ioc-template to remove unwanted files """
 
         cleanup_completed = False
 
         if platform == "win32":
-            if(os.path.exists(ioc_top + "/" + self.ioc_name + "/cleanup.bat")):
-                initIOC_print("Performing cleanup for {}".format(self.ioc_name))
-                out = subprocess.call([ioc_top + "/" + self.ioc_name + "/cleanup.bat"])
+            if os.path.exists(ioc_top + '/' + self.ioc_name + '/cleanup.bat'):
+                initIOC_print('Performing cleanup for {}'.format(self.ioc_name))
+                out = subprocess.call([ioc_top + '/' + self.ioc_name + '/cleanup.bat'])
                 initIOC_print('')
                 cleanup_completed = True
+                os.remove(ioc_top + '/' + self.ioc_name + '/cleanup.bat')
         else:
-            if(os.path.exists(ioc_top + "/" + self.ioc_name + "/cleanup.sh")):
-                initIOC_print("Performing cleanup for {}".format(self.ioc_name))
-                out = subprocess.call(["bash", ioc_top + "/" + self.ioc_name + "/cleanup.sh"])
+            if os.path.exists(ioc_top + '/' + self.ioc_name + '/cleanup.sh'):
+                initIOC_print('Performing cleanup for {}'.format(self.ioc_name))
+                out = subprocess.call(['bash', ioc_top + '/' + self.ioc_name + '/cleanup.sh'])
                 initIOC_print('')
                 cleanup_completed = True
-        if os.path.exists(ioc_top +"/" + self.ioc_name + "/st.cmd"):
-            os.chmod(ioc_top +"/" + self.ioc_name + "/st.cmd", 0o755)
+                os.remove(ioc_top + '/' + self.ioc_name + '/cleanup.sh')
+        if os.path.exists(ioc_top + '/' + self.ioc_name + '/st.cmd'):
+            os.chmod(ioc_top + '/' + self.ioc_name + '/st.cmd', 0o755)
         if not cleanup_completed:
-            initIOC_print("No cleanup script found, using outdated version of IOC template")
+            initIOC_print('No cleanup script found, using outdated version of IOC template')
 
 
 #-------------------------------------------------
