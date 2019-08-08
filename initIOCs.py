@@ -200,21 +200,23 @@ class IOCAction:
     def convert_as_and_dep(self, ioc_top, bin_loc, bin_flat):
         """ Function repsonsible for setting up autosave and dependency files """
 
-            autosave_path = ioc_path + "/autosaveFiles"
-            autosave_type = self.ioc_type[2:].lower()
-            if os.path.exists(autosave_path + "/" + autosave_type + "_auto_settings.req"):
-                initIOC_print("Generating auto_settings.req file for IOC {}.".format(self.ioc_name))
-                os.rename(autosave_path + "/" + autosave_type + "_auto_settings.req", ioc_path + "/auto_settings.req")
-            else:
-                initIOC_print("Could not find supported auto_settings.req file for IOC {}.".format(self.ioc_name))
+        ioc_path = ioc_top +"/" + self.ioc_name
+        startup_type = self.ioc_type[2:].lower()
+        autosave_path = ioc_path + "/autosaveFiles"
+        autosave_type = self.ioc_type[2:].lower()
+        if os.path.exists(autosave_path + "/" + autosave_type + "_auto_settings.req"):
+            initIOC_print("Generating auto_settings.req file for IOC {}.".format(self.ioc_name))
+            os.rename(autosave_path + "/" + autosave_type + "_auto_settings.req", ioc_path + "/auto_settings.req")
+        else:
+            initIOC_print("Could not find supported auto_settings.req file for IOC {}.".format(self.ioc_name))
 
-            if os.path.exists(ioc_path + "/dependancyFiles"):
-                for file in os.listdir(ioc_path + "/dependancyFiles"):
-                    if file.lower().startswith(startup_type):
-                        initIOC_print('Copying dependency file {} for {}'.format(file, self.ioc_type))
-                        # Copy all required dependency files
-                        os.rename(ioc_path + "/dependancyFiles/" + file, ioc_path + "/" + file.split('_', 1)[-1])
-                        self.fix_macros(ioc_path + '/' + file.split('_', 1)[-1])
+        if os.path.exists(ioc_path + "/dependancyFiles"):
+            for file in os.listdir(ioc_path + "/dependancyFiles"):
+                if file.lower().startswith(startup_type):
+                    initIOC_print('Copying dependency file {} for {}'.format(file, self.ioc_type))
+                    # Copy all required dependency files
+                    os.rename(ioc_path + "/dependancyFiles/" + file, ioc_path + "/" + file.split('_', 1)[-1])
+                    self.fix_macros(ioc_path + '/' + file.split('_', 1)[-1])
 
 
     def process(self, ioc_top, bin_loc, bin_flat):
