@@ -37,7 +37,7 @@ USING_GUI=False
 GUI_TOP_WINDOW=None
 
 # version number
-version = "v0.0.5"
+version = "v0.0.6"
 
 
 #-------------------------------------------------
@@ -249,7 +249,7 @@ class IOCAction:
         binary_path =  self.getIOCBin(bin_loc, bin_flat) 
         if binary_path is None:
             initIOC_print('ERROR - Could not identify a compiled IOC binary for {}, skipping'.format(self.ioc_type))
-            initIOC_print('Make sure that the binary exists and is compiled in the expected location, and make sure BINARIES_FLAT is correct.')
+            initIOC_print('Make sure that the binary exists and is compiled in the expected location.')
             return -1
         # Clone the template
         out = subprocess.call(["git", "clone", "--quiet", "https://github.com/epicsNSLS2-deploy/ioc-template", ioc_top + "/" + self.ioc_name])
@@ -287,7 +287,7 @@ class IOCAction:
         """
 
         if os.path.exists(ioc_top + "/" + self.ioc_name +"/unique.cmd"):
-            initIOC_print("Updating unique file based on configuration")
+            initIOC_print("Updating unique file based on configuration.")
             unique_path = ioc_top + "/" + self.ioc_name +"/unique.cmd"
             unique_old_path = ioc_top +"/" + self.ioc_name +"/unique_OLD.cmd"
             os.rename(unique_path, unique_old_path)
@@ -329,7 +329,7 @@ class IOCAction:
             uq_old.close()
             uq.close()
         else:
-            initIOC_print("No unique file found, proceeding to next step")
+            initIOC_print("No unique file found, proceeding to next step.")
 
 
     def update_config(self, ioc_top, hostname):
@@ -346,7 +346,7 @@ class IOCAction:
 
         conf_path = ioc_top + "/" + self.ioc_name + "/config"
         if os.path.exists(conf_path):
-            initIOC_print("Updating config file for procServer connection")
+            initIOC_print("Updating config file for procServer connection.")
             conf_old_path = ioc_top + "/" + self.ioc_name + "/config_OLD"
             os.rename(conf_path, conf_old_path)
             cn_old = open(conf_old_path, "r")
@@ -365,7 +365,7 @@ class IOCAction:
             cn_old.close()
             cn.close()
         else:
-            initIOC_print("No config file found moving to next step")
+            initIOC_print("No config file found moving to next step.")
 
 
     def fix_env_paths(self, ioc_top, bin_flat):
