@@ -434,7 +434,7 @@ class IOCAction:
             # identify the IOC 
             for name in os.listdir(driver_path):
                 # Add check to see if NOIOC in name - occasional problems generating ADSimDetector
-                if "IOC" in name or "ioc" in name and "NOIOC" not in name.upper():
+                if ("IOC" in name or "ioc" in name) and "NOIOC" not in name.upper():
                     driver_path = driver_path + "/" + name
                     break 
             # Find the bin folder
