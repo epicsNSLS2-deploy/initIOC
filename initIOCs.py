@@ -1055,7 +1055,7 @@ class InitIOCGui:
             if os.path.exists(os.path.join(self.configuration['TOP_BINARY_DIR'], 'support')):
                 self.bin_flat = False
 
-        self.actions.clear()
+        del self.actions[:]
         for line in self.iocPanel.get('1.0', END).splitlines():
             if not line.startswith('#') and len(line) > 1:
                 action = parse_line_into_action(line, self.configuration['PREFIX'], self.ioc_num_counter)
