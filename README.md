@@ -70,3 +70,4 @@ initIOCs.py relies on [ioc-template](https://github.com/epicsNSLS2-deploy/ioc-te
 * ADPointGrey
 * ADSimDetector
 * ADURL
+* ADPSL
