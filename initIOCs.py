@@ -59,7 +59,8 @@ supported_drivers = [
     'ADPilatus',
     'ADSpinnaker',
     'ADAndor3',
-    'ADURL'
+    'ADURL',
+    'ADPSL',
 ]
 
 # Tooltip messages for the configuration options
