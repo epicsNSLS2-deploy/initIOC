@@ -592,7 +592,7 @@ def parse_line_into_action(line, prefix, ioc_num_counter):
         return None
 
 
-def read_ioc_config():
+def read_ioc_config(initial_ioc_number):
     """
     Function for reading the CONFIGURE file. Returns a dictionary of configure options,
     a list of IOCAction instances, and a boolean representing if binaries are flat or not
@@ -620,7 +620,7 @@ def read_ioc_config():
             split = line.split('=')
             configuration[split[0]] = split[1]
         elif not line.startswith('#') and len(line) > 1:
-            ioc_action = parse_line_into_action(line, configuration['PREFIX'], ioc_num_counter)
+            ioc_action = parse_line_into_action(line, configuration['PREFIX'], ioc_num_counter + initial_ioc_number - 1)
             if ioc_action is not None:
                 ioc_num_counter = ioc_num_counter + 1
                 ioc_actions.append(ioc_action)
@@ -687,7 +687,7 @@ def print_supported_drivers():
     initIOC_print('')
 
 
-def execute_ioc_action(action, configuration, bin_flat, initial_ioc_number):
+def execute_ioc_action(action, configuration, bin_flat):
     """
     Function that runs all required IOC action functions with a given configuration
 
@@ -714,9 +714,10 @@ def execute_ioc_action(action, configuration, bin_flat, initial_ioc_number):
         action.cleanup(configuration["IOC_DIR"])
 
 
-def guided_init():
+def guided_init(initial_ioc_num):
     """ Function that guides the user through generating a single IOC through the CLI """
 
+    ioc_num = initial_ioc_num
     print_start_message()
     initIOC_print('Welcome to initIOC!')
     configuration = {}
@@ -743,11 +744,12 @@ def guided_init():
         asyn_port = input('What asyn port should the IOC use? (ex. PS1). > ')
         ioc_port = input('What telnet port should procServer use to run the IOC? > ')
         connection = input('Enter the connection param for your device. (ex. IP, serial number etc.) enter NA if not sure. > ')
-        ioc_action = IOCAction(driver_type, ioc_name, configuration['PREFIX'], asyn_port, ioc_port, connection, 1)
+        ioc_action = IOCAction(driver_type, ioc_name, configuration['PREFIX'], asyn_port, ioc_port, connection, ioc_num)
         execute_ioc_action(ioc_action, configuration, bin_flat)
         another = input('Would you like to generate another IOC? (y/n). > ')
         if another != 'y':
             another_ioc = False
+            ioc_num = ioc_num + 1
     initIOC_print('Done.')
 
 
@@ -758,11 +760,11 @@ def init_iocs_cli(initial_ioc_number):
     """
 
     print_start_message()
-    actions, configuration, bin_flat = read_ioc_config()
-    init_iocs(actions, configuration, bin_flat, initial_ioc_number)
+    actions, configuration, bin_flat = read_ioc_config(initial_ioc_number)
+    init_iocs(actions, configuration, bin_flat)
 
 
-def init_iocs(actions, configuration, bin_flat, initial_ioc_number, is_gui = False):
+def init_iocs(actions, configuration, bin_flat, is_gui = False):
     """
     Main driver function. Recieves actions, the configuration, and bin_flat toggle
 
@@ -1059,7 +1061,7 @@ class InitIOCGui:
         del self.actions[:]
         for line in self.iocPanel.get('1.0', END).splitlines():
             if not line.startswith('#') and len(line) > 1:
-                action = parse_line_into_action(line, self.configuration['PREFIX'], self.ioc_num_counter)
+                action = parse_line_into_action(line, self.configuration['PREFIX'], self.ioc_num_counter + self.initial_ioc_number - 1)
                 if action is not None:
                     self.actions.append(action)
                     self.ioc_num_counter = self.ioc_num_counter + 1
@@ -1074,7 +1076,7 @@ class InitIOCGui:
             self.showError('Process thread is already active!')
         else:
            self.read_gui_config()
-           self.executionThread = threading.Thread(target=lambda: init_iocs(self.actions, self.configuration, self.bin_flat, self.initial_ioc_number))
+           self.executionThread = threading.Thread(target=lambda: init_iocs(self.actions, self.configuration, self.bin_flat))
            self.executionThread.start()
 
 
@@ -1229,7 +1231,7 @@ def parse_args():
         try:
             initial_ioc_number = int(arguments['number'])
             if initial_ioc_number < 0:
-                initial_ioc_number = 0
+                initial_ioc_number = 1
         except:
             print("The input for the -n flag must be an integer > 0")
     if arguments['individual']:
