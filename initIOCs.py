@@ -687,7 +687,7 @@ def print_supported_drivers():
     initIOC_print('')
 
 
-def execute_ioc_action(action, configuration, bin_flat):
+def execute_ioc_action(action, configuration, bin_flat, initial_ioc_number):
     """
     Function that runs all required IOC action functions with a given configuration
 
@@ -751,7 +751,7 @@ def guided_init():
     initIOC_print('Done.')
 
 
-def init_iocs_cli():
+def init_iocs_cli(initial_ioc_number):
     """
     Main driver function. First calls read_ioc_config, then for each instance of IOCAction
     perform the process, update_unique, update_config, fix_env_paths, and cleanup functions
@@ -759,10 +759,10 @@ def init_iocs_cli():
 
     print_start_message()
     actions, configuration, bin_flat = read_ioc_config()
-    init_iocs(actions, configuration, bin_flat)
+    init_iocs(actions, configuration, bin_flat, initial_ioc_number)
 
 
-def init_iocs(actions, configuration, bin_flat, is_gui = False):
+def init_iocs(actions, configuration, bin_flat, initial_ioc_number, is_gui = False):
     """
     Main driver function. Recieves actions, the configuration, and bin_flat toggle
 
@@ -787,7 +787,7 @@ def init_iocs(actions, configuration, bin_flat, is_gui = False):
                 initIOC_print('To request support for {} to be added to initIOC, please create an issue on:'.format(action.ioc_type))
                 initIOC_print('https://github.com/epicsNSLS2-deploy/initIOC/issues')
             else:
-                execute_ioc_action(action, configuration, bin_flat)
+                execute_ioc_action(action, configuration, bin_flat, initial_ioc_number)
 
 
 def initIOC_print(text):
@@ -911,11 +911,11 @@ class InitIOCGui:
         opens window to add new IOC
     """
 
-    def __init__(self, master):     
+    def __init__(self, master, initial_ioc_number):
         """ Constructor for InitIOCGui """
 
         self.master = master
-
+        self.initial_ioc_number = initial_ioc_number
 
         self.master.protocol('WM_DELETE_WINDOW', self.thread_cleanup)
         self.frame = Frame(self.master)
@@ -978,7 +978,7 @@ class InitIOCGui:
             elem_entry.insert(0, self.configuration[elem])
             CreateToolTip(elem_entry, config_tooltips[elem])
             row_counter = row_counter + 1
-        
+
         self.master.title('initIOC GUI')
 
         ttk.Separator(self.frame, orient=HORIZONTAL).grid(row=row_counter, columnspan=3, padx = 5, sticky = 'ew')
@@ -1074,7 +1074,7 @@ class InitIOCGui:
             self.showError('Process thread is already active!')
         else:
            self.read_gui_config()
-           self.executionThread = threading.Thread(target=lambda: init_iocs(self.actions, self.configuration, self.bin_flat))
+           self.executionThread = threading.Thread(target=lambda: init_iocs(self.actions, self.configuration, self.bin_flat, self.initial_ioc_number))
            self.executionThread.start()
 
 
@@ -1136,7 +1136,7 @@ class AddIOCWindow:
         self.root = root
         self.master = Toplevel()
         self.master.title('Add New IOC')
-        
+
         # Create the entry fields for all the paramters
         self.ioc_type_var       = StringVar()
         self.ioc_type_var.set(supported_drivers[0])
@@ -1144,7 +1144,7 @@ class AddIOCWindow:
         self.ioc_name_var       = StringVar()
         self.asyn_port_var      = StringVar()
         self.ioc_port_var       = StringVar()
-        self.cam_connect_var    = StringVar()  
+        self.cam_connect_var    = StringVar()
 
         # TODO: Change this IOC type to a dropdown menu.
         ioc_type_label      = Label(self.master, text="IOC Type").grid(row = 0, column = 0, padx = 10, pady = 10)
@@ -1222,10 +1222,19 @@ def parse_args():
 
     parser.add_argument('-i', '--individual',   action='store_true', help='Add this flag to go through a guided process for generating a single IOC at a time.')
     parser.add_argument('-g', '--gui',          action='store_true', help='Add this flag to enable the GUI version of initIOC.')
+    parser.add_argument('-n', '--number',       help='Add this flag followed by a number to set an initial value for the IOC counter')
     arguments = vars(parser.parse_args())
+    initial_ioc_number = 0
+    if arguments['number'] is not None:
+        try:
+            initial_ioc_number = int(arguments['number'])
+            if initial_ioc_number < 0:
+                initial_ioc_number = 0
+        except:
+            print("The input for the -n flag must be an integer > 0")
     if arguments['individual']:
         # If user selects a guided init, perform that
-        guided_init()
+        guided_init(initial_ioc_number)
     elif arguments['gui']:
         # otherwise if user selects GUI, open it provided all required imports went through
         if not WITH_GUI:
@@ -1237,15 +1246,15 @@ def parse_args():
             root = Tk()
 
             USING_GUI = True
-            app = InitIOCGui(root)
-            
+            app = InitIOCGui(root, initial_ioc_number)
+
             GUI_TOP_WINDOW = app
             print_start_message()
             root.mainloop()
 
     else:
         # Otherwise perform default initIOCs through the CLI
-        init_iocs_cli()
+        init_iocs_cli(initial_ioc_number)
 
 
 # Run the script
