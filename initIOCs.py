@@ -789,7 +789,7 @@ def init_iocs(actions, configuration, bin_flat, is_gui = False):
                 initIOC_print('To request support for {} to be added to initIOC, please create an issue on:'.format(action.ioc_type))
                 initIOC_print('https://github.com/epicsNSLS2-deploy/initIOC/issues')
             else:
-                execute_ioc_action(action, configuration, bin_flat, initial_ioc_number)
+                execute_ioc_action(action, configuration, bin_flat)
 
 
 def initIOC_print(text):
@@ -966,7 +966,7 @@ class InitIOCGui:
         self.master.config(menu=menubar)
 
         # Read initial configuration from save file
-        self.actions, self.configuration, self.bin_flat = read_ioc_config()
+        self.actions, self.configuration, self.bin_flat = read_ioc_config(self.initial_ioc_number)
 
         # User inputs for all configuration options
         self.text_inputs = {}
@@ -1093,8 +1093,7 @@ class InitIOCGui:
             file.write('{}={}\n\n'.format(elem, self.configuration[elem]))
 
         file.write(self.iocPanel.get('1.0', END))
-        self.showInfo('Saved configuration to CONFIGURE file.')
-
+        self.writeToLog('Saved configuration to CONFIGURE file.')
 
     def saveLog(self):
         """ Function that saves the current log into a log file """
