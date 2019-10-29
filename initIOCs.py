@@ -59,7 +59,8 @@ supported_drivers = [
     'ADPilatus',
     'ADSpinnaker',
     'ADAndor3',
-    'ADURL'
+    'ADURL',
+    'ADPSL',
 ]
 
 # Tooltip messages for the configuration options
@@ -434,7 +435,7 @@ class IOCAction:
             # identify the IOC 
             for name in os.listdir(driver_path):
                 # Add check to see if NOIOC in name - occasional problems generating ADSimDetector
-                if "IOC" in name or "ioc" in name and "NOIOC" not in name.upper():
+                if ("IOC" in name or "ioc" in name) and "NOIOC" not in name.upper():
                     driver_path = driver_path + "/" + name
                     break 
             # Find the bin folder
@@ -1055,7 +1056,7 @@ class InitIOCGui:
             if os.path.exists(os.path.join(self.configuration['TOP_BINARY_DIR'], 'support')):
                 self.bin_flat = False
 
-        self.actions.clear()
+        del self.actions[:]
         for line in self.iocPanel.get('1.0', END).splitlines():
             if not line.startswith('#') and len(line) > 1:
                 action = parse_line_into_action(line, self.configuration['PREFIX'], self.ioc_num_counter)
