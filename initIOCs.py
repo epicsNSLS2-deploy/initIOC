@@ -592,7 +592,7 @@ def parse_line_into_action(line, prefix, ioc_num_counter):
         return None
 
 
-def read_ioc_config():
+def read_ioc_config(initial_ioc_number):
     """
     Function for reading the CONFIGURE file. Returns a dictionary of configure options,
     a list of IOCAction instances, and a boolean representing if binaries are flat or not
@@ -620,7 +620,7 @@ def read_ioc_config():
             split = line.split('=')
             configuration[split[0]] = split[1]
         elif not line.startswith('#') and len(line) > 1:
-            ioc_action = parse_line_into_action(line, configuration['PREFIX'], ioc_num_counter)
+            ioc_action = parse_line_into_action(line, configuration['PREFIX'], ioc_num_counter + initial_ioc_number - 1)
             if ioc_action is not None:
                 ioc_num_counter = ioc_num_counter + 1
                 ioc_actions.append(ioc_action)
@@ -714,14 +714,33 @@ def execute_ioc_action(action, configuration, bin_flat):
         action.cleanup(configuration["IOC_DIR"])
 
 
-def guided_init():
+def guided_init(initial_ioc_num):
     """ Function that guides the user through generating a single IOC through the CLI """
 
+    ioc_num = initial_ioc_num
     print_start_message()
     initIOC_print('Welcome to initIOC!')
     configuration = {}
-    configuration['IOC_DIR']        = input('Enter the ioc output location. > ')
-    configuration['TOP_BINARY_DIR'] = input('Enter the location of your compiled binaries. > ')
+    valid = False
+    while not valid:
+        configuration['IOC_DIR']        = input('Enter the ioc output location. > ')
+        if not os.path.exists(os.path.dirname(configuration['IOC_DIR'])):
+            initIOC_print('The selected ioc output directory does not exist, please try again.')
+        elif os.path.isdir(configuration['IOC_DIR']) and not os.access(configuration['IOC_DIR'], os.W_OK):
+            initIOC_print('The selected output directory exists, but you do not have required permissions.')
+        elif not os.access(os.path.dirname(configuration['IOC_DIR']), os.W_OK):
+            initIOC_print('You do not have permission to generate the IOC output directory.')
+        else:
+            valid = True
+    
+    valid = False
+    while not valid:
+        configuration['TOP_BINARY_DIR'] = input('Enter the location of your compiled binaries. > ')
+        if not os.path.exists(configuration['TOP_BINARY_DIR']):
+            initIOC_print('The selected top binary directory does not exist, please try again.')
+        else:
+            valid = True
+
     bin_flat = True
     if os.path.exists(configuration['TOP_BINARY_DIR']):
         if os.path.exists(os.path.join(configuration['TOP_BINARY_DIR'], 'support')):
@@ -729,7 +748,7 @@ def guided_init():
     configuration['PREFIX']     = input('Enter the IOC Prefix (without the camera specific portion ex. XF:10IDC-BI). > ')
     configuration['HOSTNAME']   = input('Enter the IOC server hostname. > ')
     configuration['ENGINEER']   = input('Enter your name and contact information. > ')
-    configuration['CA_ADDRESS'] = input('Enter the CA_ADDRESS IP. > ')
+    configuration['CA_ADDRESS'] = input('Enter the Channel Address subnet IP. > ')
     another_ioc = True
     while another_ioc:
         driver_type = None
@@ -743,22 +762,23 @@ def guided_init():
         asyn_port = input('What asyn port should the IOC use? (ex. PS1). > ')
         ioc_port = input('What telnet port should procServer use to run the IOC? > ')
         connection = input('Enter the connection param for your device. (ex. IP, serial number etc.) enter NA if not sure. > ')
-        ioc_action = IOCAction(driver_type, ioc_name, configuration['PREFIX'], asyn_port, ioc_port, connection, 1)
+        ioc_action = IOCAction(driver_type, ioc_name, configuration['PREFIX'], asyn_port, ioc_port, connection, ioc_num)
         execute_ioc_action(ioc_action, configuration, bin_flat)
         another = input('Would you like to generate another IOC? (y/n). > ')
         if another != 'y':
             another_ioc = False
+            ioc_num = ioc_num + 1
     initIOC_print('Done.')
 
 
-def init_iocs_cli():
+def init_iocs_cli(initial_ioc_number):
     """
     Main driver function. First calls read_ioc_config, then for each instance of IOCAction
     perform the process, update_unique, update_config, fix_env_paths, and cleanup functions
     """
 
     print_start_message()
-    actions, configuration, bin_flat = read_ioc_config()
+    actions, configuration, bin_flat = read_ioc_config(initial_ioc_number)
     init_iocs(actions, configuration, bin_flat)
 
 
@@ -787,7 +807,7 @@ def init_iocs(actions, configuration, bin_flat, is_gui = False):
                 initIOC_print('To request support for {} to be added to initIOC, please create an issue on:'.format(action.ioc_type))
                 initIOC_print('https://github.com/epicsNSLS2-deploy/initIOC/issues')
             else:
-                execute_ioc_action(action, configuration, bin_flat)
+                execute_ioc_action(action, configuration, bin_flat, initial_ioc_number)
 
 
 def initIOC_print(text):
@@ -911,11 +931,11 @@ class InitIOCGui:
         opens window to add new IOC
     """
 
-    def __init__(self, master):     
+    def __init__(self, master, initial_ioc_number):
         """ Constructor for InitIOCGui """
 
         self.master = master
-
+        self.initial_ioc_number = initial_ioc_number
 
         self.master.protocol('WM_DELETE_WINDOW', self.thread_cleanup)
         self.frame = Frame(self.master)
@@ -978,7 +998,7 @@ class InitIOCGui:
             elem_entry.insert(0, self.configuration[elem])
             CreateToolTip(elem_entry, config_tooltips[elem])
             row_counter = row_counter + 1
-        
+
         self.master.title('initIOC GUI')
 
         ttk.Separator(self.frame, orient=HORIZONTAL).grid(row=row_counter, columnspan=3, padx = 5, sticky = 'ew')
@@ -1059,7 +1079,7 @@ class InitIOCGui:
         del self.actions[:]
         for line in self.iocPanel.get('1.0', END).splitlines():
             if not line.startswith('#') and len(line) > 1:
-                action = parse_line_into_action(line, self.configuration['PREFIX'], self.ioc_num_counter)
+                action = parse_line_into_action(line, self.configuration['PREFIX'], self.ioc_num_counter + self.initial_ioc_number - 1)
                 if action is not None:
                     self.actions.append(action)
                     self.ioc_num_counter = self.ioc_num_counter + 1
@@ -1136,7 +1156,7 @@ class AddIOCWindow:
         self.root = root
         self.master = Toplevel()
         self.master.title('Add New IOC')
-        
+
         # Create the entry fields for all the paramters
         self.ioc_type_var       = StringVar()
         self.ioc_type_var.set(supported_drivers[0])
@@ -1144,7 +1164,7 @@ class AddIOCWindow:
         self.ioc_name_var       = StringVar()
         self.asyn_port_var      = StringVar()
         self.ioc_port_var       = StringVar()
-        self.cam_connect_var    = StringVar()  
+        self.cam_connect_var    = StringVar()
 
         # TODO: Change this IOC type to a dropdown menu.
         ioc_type_label      = Label(self.master, text="IOC Type").grid(row = 0, column = 0, padx = 10, pady = 10)
@@ -1220,32 +1240,46 @@ def parse_args():
 
     parser = argparse.ArgumentParser(description='A script for auto-initializing areaDetector IOCs. Edit the CONFIGURE file and run without arguments for default operation.')
 
-    parser.add_argument('-i', '--individual',   action='store_true', help='Add this flag to go through a guided process for generating a single IOC at a time.')
+    parser.add_argument('-i', '--interactive',   action='store_true', help='Add this flag to go through a guided process for generating a single IOC at a time.')
     parser.add_argument('-g', '--gui',          action='store_true', help='Add this flag to enable the GUI version of initIOC.')
+    parser.add_argument('-n', '--number',       help='Add this flag followed by a number to set an initial value for the IOC counter')
     arguments = vars(parser.parse_args())
-    if arguments['individual']:
-        # If user selects a guided init, perform that
-        guided_init()
-    elif arguments['gui']:
-        # otherwise if user selects GUI, open it provided all required imports went through
-        if not WITH_GUI:
-            print('ERROR - tkinter not found for your python3 distribution, required for GUI.')
-            print('Please either install tkinter or use the command line option for initIOC.')
-            print('Exiting...')
-            exit()
+    initial_ioc_number = 0
+    if arguments['number'] is not None:
+        try:
+            initial_ioc_number = int(arguments['number'])
+            if initial_ioc_number < 0:
+                initial_ioc_number = 1
+        except:
+            print("The input for the -n flag must be an integer > 0")
+    try:
+        if arguments['interactive']:
+            # If user selects a guided init, perform that
+            guided_init(initial_ioc_number)
+        elif arguments['gui']:
+            # otherwise if user selects GUI, open it provided all required imports went through
+            if not WITH_GUI:
+                print('ERROR - tkinter not found for your python3 distribution, required for GUI.')
+                print('Please either install tkinter or use the command line option for initIOC.')
+                print('Exiting...')
+                exit()
+            else:
+                root = Tk()
+
+                USING_GUI = True
+                app = InitIOCGui(root, initial_ioc_number)
+
+                GUI_TOP_WINDOW = app
+                print_start_message()
+                root.mainloop()
+
         else:
-            root = Tk()
+            # Otherwise perform default initIOCs through the CLI
+            init_iocs_cli(initial_ioc_number)
 
-            USING_GUI = True
-            app = InitIOCGui(root)
-            
-            GUI_TOP_WINDOW = app
-            print_start_message()
-            root.mainloop()
-
-    else:
-        # Otherwise perform default initIOCs through the CLI
-        init_iocs_cli()
+    except KeyboardInterrupt:
+        print('\n\nExiting...')
+        exit()
 
 
 # Run the script
