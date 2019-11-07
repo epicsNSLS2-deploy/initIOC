@@ -721,8 +721,26 @@ def guided_init(initial_ioc_num):
     print_start_message()
     initIOC_print('Welcome to initIOC!')
     configuration = {}
-    configuration['IOC_DIR']        = input('Enter the ioc output location. > ')
-    configuration['TOP_BINARY_DIR'] = input('Enter the location of your compiled binaries. > ')
+    valid = False
+    while not valid:
+        configuration['IOC_DIR']        = input('Enter the ioc output location. > ')
+        if not os.path.exists(os.path.dirname(configuration['IOC_DIR'])):
+            initIOC_print('The selected ioc output directory does not exist, please try again.')
+        elif os.path.isdir(configuration['IOC_DIR']) and not os.access(configuration['IOC_DIR'], os.W_OK):
+            initIOC_print('The selected output directory exists, but you do not have required permissions.')
+        elif not os.access(os.path.dirname(configuration['IOC_DIR']), os.W_OK):
+            initIOC_print('You do not have permission to generate the IOC output directory.')
+        else:
+            valid = True
+    
+    valid = False
+    while not valid:
+        configuration['TOP_BINARY_DIR'] = input('Enter the location of your compiled binaries. > ')
+        if not os.path.exists(configuration['TOP_BINARY_DIR']):
+            initIOC_print('The selected top binary directory does not exist, please try again.')
+        else:
+            valid = True
+
     bin_flat = True
     if os.path.exists(configuration['TOP_BINARY_DIR']):
         if os.path.exists(os.path.join(configuration['TOP_BINARY_DIR'], 'support')):
@@ -730,7 +748,7 @@ def guided_init(initial_ioc_num):
     configuration['PREFIX']     = input('Enter the IOC Prefix (without the camera specific portion ex. XF:10IDC-BI). > ')
     configuration['HOSTNAME']   = input('Enter the IOC server hostname. > ')
     configuration['ENGINEER']   = input('Enter your name and contact information. > ')
-    configuration['CA_ADDRESS'] = input('Enter the CA_ADDRESS IP. > ')
+    configuration['CA_ADDRESS'] = input('Enter the Channel Address subnet IP. > ')
     another_ioc = True
     while another_ioc:
         driver_type = None
@@ -1222,7 +1240,7 @@ def parse_args():
 
     parser = argparse.ArgumentParser(description='A script for auto-initializing areaDetector IOCs. Edit the CONFIGURE file and run without arguments for default operation.')
 
-    parser.add_argument('-i', '--individual',   action='store_true', help='Add this flag to go through a guided process for generating a single IOC at a time.')
+    parser.add_argument('-i', '--interactive',   action='store_true', help='Add this flag to go through a guided process for generating a single IOC at a time.')
     parser.add_argument('-g', '--gui',          action='store_true', help='Add this flag to enable the GUI version of initIOC.')
     parser.add_argument('-n', '--number',       help='Add this flag followed by a number to set an initial value for the IOC counter')
     arguments = vars(parser.parse_args())
@@ -1234,29 +1252,34 @@ def parse_args():
                 initial_ioc_number = 1
         except:
             print("The input for the -n flag must be an integer > 0")
-    if arguments['individual']:
-        # If user selects a guided init, perform that
-        guided_init(initial_ioc_number)
-    elif arguments['gui']:
-        # otherwise if user selects GUI, open it provided all required imports went through
-        if not WITH_GUI:
-            print('ERROR - tkinter not found for your python3 distribution, required for GUI.')
-            print('Please either install tkinter or use the command line option for initIOC.')
-            print('Exiting...')
-            exit()
+    try:
+        if arguments['interactive']:
+            # If user selects a guided init, perform that
+            guided_init(initial_ioc_number)
+        elif arguments['gui']:
+            # otherwise if user selects GUI, open it provided all required imports went through
+            if not WITH_GUI:
+                print('ERROR - tkinter not found for your python3 distribution, required for GUI.')
+                print('Please either install tkinter or use the command line option for initIOC.')
+                print('Exiting...')
+                exit()
+            else:
+                root = Tk()
+
+                USING_GUI = True
+                app = InitIOCGui(root, initial_ioc_number)
+
+                GUI_TOP_WINDOW = app
+                print_start_message()
+                root.mainloop()
+
         else:
-            root = Tk()
+            # Otherwise perform default initIOCs through the CLI
+            init_iocs_cli(initial_ioc_number)
 
-            USING_GUI = True
-            app = InitIOCGui(root, initial_ioc_number)
-
-            GUI_TOP_WINDOW = app
-            print_start_message()
-            root.mainloop()
-
-    else:
-        # Otherwise perform default initIOCs through the CLI
-        init_iocs_cli(initial_ioc_number)
+    except KeyboardInterrupt:
+        print('\n\nExiting...')
+        exit()
 
 
 # Run the script
