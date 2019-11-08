@@ -807,7 +807,7 @@ def init_iocs(actions, configuration, bin_flat, is_gui = False):
                 initIOC_print('To request support for {} to be added to initIOC, please create an issue on:'.format(action.ioc_type))
                 initIOC_print('https://github.com/epicsNSLS2-deploy/initIOC/issues')
             else:
-                execute_ioc_action(action, configuration, bin_flat, initial_ioc_number)
+                execute_ioc_action(action, configuration, bin_flat)
 
 
 def initIOC_print(text):
@@ -1111,7 +1111,7 @@ class InitIOCGui:
             file.write('{}={}\n\n'.format(elem, self.configuration[elem]))
 
         file.write(self.iocPanel.get('1.0', END))
-        self.showInfo('Saved configuration to CONFIGURE file.')
+        initIOC_print('Saved configuration to CONFIGURE file.')
 
 
     def saveLog(self):
@@ -1121,7 +1121,8 @@ class InitIOCGui:
             os.mkdir('logs')
         elif not os.path.isdir('logs'):
             self.showError('logs directory could not be created, logs file exists')
-        log = open('logs/initIOC-{}.log'.format(datetime.datetime.now()), 'w')
+        stamp = datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
+        log = open('logs/initIOC-{}.log'.format(stamp), 'w')
         log.write(self.logPanel.get('1.0', END))
         log.close()
         self.writeToLog('Wrote log file.\n')
