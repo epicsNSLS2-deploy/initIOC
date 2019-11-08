@@ -984,7 +984,7 @@ class InitIOCGui:
         self.master.config(menu=menubar)
 
         # Read initial configuration from save file
-        self.actions, self.configuration, self.bin_flat = read_ioc_config()
+        self.actions, self.configuration, self.bin_flat = read_ioc_config(self.initial_ioc_number)
 
         # User inputs for all configuration options
         self.text_inputs = {}
