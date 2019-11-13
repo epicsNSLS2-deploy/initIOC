@@ -61,6 +61,7 @@ supported_drivers = [
     'ADAndor3',
     'ADURL',
     'ADPSL',
+    'ADEiger',
 ]
 
 # Tooltip messages for the configuration options
