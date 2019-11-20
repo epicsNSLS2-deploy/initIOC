@@ -82,9 +82,21 @@ config_tooltips = {
 #-------------------------------------------------
 
 
+def initIOC_path_join(path_A, path_B):
+    output_path = path_A
+    if not path_A.endswith('/'):
+        output_path = output_path + '/'
+    if path_B.startswith('/'):
+        output_path = output_path + path_B[1:]
+    else:
+        output_path = output_path + path_B
+
+    return output_path
+
+
 class IOCActionManager:
 
-    def __init__(self, ioc_top, binary_location, binaries_flat, set_lib_path, use_template):
+    def __init__(self, ioc_top, binary_location, binaries_flat, set_lib_path, use_template, with_deps):
 
         self.ioc_top            = ioc_top
         self.ioc_top_created    = False
@@ -92,72 +104,73 @@ class IOCActionManager:
         self.binaries_flat      = binaries_flat
         self.set_lib_path       = set_lib_path
         self.use_template       = use_template
-
+        self.with_deps          = with_deps
+        self.unique_env_blacklist = ['EPICS_DB_INCLUDE_PATH']
         self.update_mod_paths()
 
     def update_mod_paths(self):
-        self.base_path = os.path.join(self.binary_location, 'base')
+        self.base_path = initIOC_path_join(self.binary_location, 'base')
         if self.binaries_flat:
             self.support_path = self.binary_location
         else:
-            self.support_path = os.path.join(self.binary_location, 'support')
+            self.support_path = initIOC_path_join(self.binary_location, 'support')
 
-        self.areaDetector_path = os.path.join(self.support_path, 'areaDetector')
+        self.areaDetector_path = initIOC_path_join(self.support_path, 'areaDetector')
 
 
     def find_paths_for_action(self, action):
 
         try:
-            driver_path = os.path.join(self.areaDetector_path, action.ioc_type)
+            driver_path = initIOC_path_join(self.areaDetector_path, action.ioc_type)
 
             # identify the IOCs folder
             for name in os.listdir(driver_path):
                 if "ioc" == name or "iocs" == name:
-                    driver_path = driver_path + "/" + name
+                    driver_path = initIOC_path_join(driver_path, name)
                     break
 
             # identify the IOC 
             for name in os.listdir(driver_path):
                 # Add check to see if NOIOC in name - occasional problems generating ADSimDetector
                 if ("IOC" in name or "ioc" in name) and "NOIOC" not in name.upper():
-                    driver_path = os.path.join(driver_path, name)
+                    driver_path = initIOC_path_join(driver_path, name)
                     break
 
             # Find the dbd dile
-            dbd_path = os.path.join(driver_path, "dbd")
+            dbd_path = initIOC_path_join(driver_path, "dbd")
             for name in os.listdir(dbd_path):
                 if name.endswith(".dbd"):
-                    dbd_path = os.path.join(dbd_path, name)
+                    dbd_path = initIOC_path_join(dbd_path, name)
                     break
 
             # find the driver executable
-            executable_path = os.path.join(driver_path, "bin")
+            executable_path = initIOC_path_join(driver_path, "bin")
             # There should only be one architecture
             for name in os.listdir(executable_path):
-                executable_path = os.path.join(executable_path, name)
+                executable_path = initIOC_path_join(executable_path, name)
                 break
 
             # We look for the executable that ends with App
             for name in os.listdir(executable_path):
                 if 'App' in name:
-                    executable_path = os.path.join(executable_path, name)
+                    executable_path = initIOC_path_join(executable_path, name)
                     break
 
-            iocBoot_path = os.path.join(driver_path, 'iocBoot')
+            iocBoot_path = initIOC_path_join(driver_path, 'iocBoot')
             for dir in os.listdir(iocBoot_path):
                 if dir.startswith('ioc') and dir.lower().endswith(action.basename):
-                    iocBoot_path = os.path.join(iocBoot_path, dir)
+                    iocBoot_path = initIOC_path_join(iocBoot_path, dir)
                     break
-            return executable_path, dbd_path.split('{}/'.format(action.ioc_type))[1], iocBoot_path
+            return executable_path, dbd_path.split('{}'.format(action.ioc_type))[1][1:], iocBoot_path
         except FileNotFoundError:
             return None, None, None
 
 
     def get_lib_path_for_module(self, module_path, architecture, delimeter):
-        bin_loc = os.path.join(module_path, 'bin')
-        bin_loc = os.path.join(bin_loc, architecture)
-        lib_loc = os.path.join(module_path, 'lib')
-        lib_loc = os.path.join(lib_loc, architecture)
+        bin_loc = initIOC_path_join(module_path, 'bin')
+        bin_loc = initIOC_path_join(bin_loc, architecture)
+        lib_loc = initIOC_path_join(module_path, 'lib')
+        lib_loc = initIOC_path_join(lib_loc, architecture)
         return bin_loc + delimeter + lib_loc + delimeter
 
 
@@ -195,13 +208,13 @@ class IOCActionManager:
 
         if os.path.exists(self.support_path) and os.path.isdir(self.support_path):
             for dir in os.listdir(self.support_path):
-                mod_path = os.path.join(self.support_path, dir)
+                mod_path = initIOC_path_join(self.support_path, dir)
                 if os.path.isdir(mod_path) and dir != "base" and dir != "areaDetector":
                     lib_path_str = lib_path_str + self.get_lib_path_for_module(mod_path, arch, delimeter)
 
         if os.path.exists(self.areaDetector_path) and os.path.isdir(self.areaDetector_path):
             for dir in os.listdir(self.areaDetector_path):
-                mod_path = os.path.join(self.areaDetector_path, dir)
+                mod_path = initIOC_path_join(self.areaDetector_path, dir)
                 if os.path.isdir(mod_path) and (dir == 'ADCore' or dir == 'ADSupport' or dir == action.ioc_type):
                     self.get_lib_path_for_module(mod_path, arch, delimeter)
 
@@ -216,13 +229,19 @@ class IOCActionManager:
             if os.path.exists(self.ioc_top):
                 initIOC_print('IOC top directory already exists.\n')
             else:
-                os.mkdir(self.ioc_top)
+                try:
+                    initIOC_print('Creating IOC directory at {}.\n'.format(self.ioc_top))
+                    os.mkdir(self.ioc_top)
+                except PermissionError:
+                    initIOC_print('ERROR - You do not have permissions to write to specified directory!')
+                    return
             self.ioc_top_created = True
 
 
     def genertate_st_cmd(self, action, executable_path, st_base_path, dbd_path=None):
 
-        ioc_path        = os.path.join(self.ioc_top, action.ioc_name)
+        initIOC_print('Generating st.cmd using base file:\n{}'.format(st_base_path))
+        ioc_path        = initIOC_path_join(self.ioc_top, action.ioc_name)
         exec_written    = False
         lib_path        = ''
         if self.set_lib_path:
@@ -230,10 +249,10 @@ class IOCActionManager:
         
         if platform == 'win32':
             # On windows, no shebangs, so st.cmd will always run executable followed by st_base.cmd
-            st_exe = open(os.path.join(ioc_path, 'st.cmd'), 'w+')
+            st_exe = open(initIOC_path_join(ioc_path, 'st.cmd'), 'w+')
             st_exe.write('@echo OFF\n\n{}\n\n{} st_base.cmd\n'.format(lib_path, executable_path))
             st_exe.close()
-            st = open(os.path.join(ioc_path, "st_base.cmd"), "w+")
+            st = open(initIOC_path_join(ioc_path, "st_base.cmd"), "w+")
             exec_written = True
 
         elif len(executable_path) > KERNEL_PATH_LIMIT or self.set_lib_path:
@@ -243,14 +262,14 @@ class IOCActionManager:
             else:
                 # If we want to set LD_LIBRARY_PATH we do that here.
                 initIOC_print('Appending library path to start of st.cmd...')
-            st_exe = open(os.path.join(ioc_path, 'st.cmd'), 'w+')
+            st_exe = open(initIOC_path_join(ioc_path, 'st.cmd'), 'w+')
             st_exe.write('#!/bin/bash\n\n{}\n\n'.format(lib_path))
             st_exe.write('{} st_base.cmd\n'.format(executable_path))
-            st = open(os.path.join(ioc_path, "st_base.cmd"), "w+")
+            st = open(initIOC_path_join(ioc_path, "st_base.cmd"), "w+")
             st_exe.close()
             exec_written = True
         else:
-            st = open(os.path.join(ioc_path, "st.cmd"), "w+")
+            st = open(initIOC_path_join(ioc_path, "st.cmd"), "w+")
 
         if not exec_written:
             st.write('#!{}\n\n'.format(executable_path))
@@ -263,7 +282,8 @@ class IOCActionManager:
             if line.startswith('#') or 'unique.cmd' in line or 'envPaths' in line:
                 pass
             elif line.startswith('dbLoadDatabase') and dbd_path is not None:
-                st.write('dbLoadDatabase($({})/{})\n'.format(action.ioc_type.upper(), dbd_path))
+                dbd_file = initIOC_path_join('$({})'.format(action.ioc_type.upper()), dbd_path)
+                st.write('dbLoadDatabase({})\n'.format(dbd_file))
             elif 'Config(' in line and action.ioc_type != 'ADSimDetector' and '$(CAM-CONNECT)' not in line:
                 try:
                     temp = line.split(',')
@@ -284,13 +304,14 @@ class IOCActionManager:
         st_base_fp.close()
         st.close()
 
-        os.chmod(os.path.join(ioc_path, "st.cmd"), 0o755)
+        os.chmod(initIOC_path_join(ioc_path, "st.cmd"), 0o755)
 
 
     def generate_unique_cmd(self, action):
 
-        ioc_path = os.path.join(self.ioc_top, action.ioc_name)
-        unique_fp = open(os.path.join(ioc_path, 'unique.cmd'), 'w')
+        initIOC_print('Generating unique.cmd from detected environment...')
+        ioc_path = initIOC_path_join(self.ioc_top, action.ioc_name)
+        unique_fp = open(initIOC_path_join(ioc_path, 'unique.cmd'), 'w')
 
         unique_fp.write('######################################\n')
         unique_fp.write('# initIOC Auto-Generated Unique File #\n')
@@ -298,7 +319,8 @@ class IOCActionManager:
 
         unique_fp.write('epicsEnvSet("{}",{}"{}")\n\n'.format('SUPPORT_DIR', ' ' * 20, self.support_path))
         for env_var in action.epics_environment.keys():
-            unique_fp.write('epicsEnvSet("{}",{}"{}")\n'.format(env_var, ' ' * (32 - len(env_var)), action.epics_environment[env_var]))
+            if env_var not in self.unique_env_blacklist:
+                unique_fp.write('epicsEnvSet("{}",{}"{}")\n'.format(env_var, ' ' * (32 - len(env_var)), action.epics_environment[env_var]))
 
         unique_fp.close()
 
@@ -317,8 +339,9 @@ class IOCActionManager:
 
     def generate_env_paths(self, action):
 
-        ioc_path = os.path.join(self.ioc_top, action.ioc_name)
-        envPaths_fp = open(os.path.join(ioc_path, 'envPaths'), 'w')
+        initIOC_print('Generating envPaths based on discovered compiled binaries...')
+        ioc_path = initIOC_path_join(self.ioc_top, action.ioc_name)
+        envPaths_fp = open(initIOC_path_join(ioc_path, 'envPaths'), 'w')
 
         arch='linux-x86_64'
         if platform == 'win32':
@@ -329,21 +352,29 @@ class IOCActionManager:
         envPaths_fp.write('epicsEnvSet("SUPPORT",{}"$(SUPPORT_DIR)")\n\n'.format(' ' * 17))
 
         if self.binaries_flat:
-            envPaths_fp.write('epicsEnvSet("EPICS_BASE",{}"$(SUPPORT)/base")\n\n'.format(' ' * 14))
+            base_path = initIOC_path_join('$(SUPPORT)', 'base')
         else:
-            envPaths_fp.write('epicsEnvSet("EPICS_BASE",{}"$(SUPPORT)/../base")\n\n'.format(' ' * 14))
+            base_path = initIOC_path_join('$(SUPPORT)', initIOC_path_join('..', 'base'))
+        
+        envPaths_fp.write('epicsEnvSet("EPICS_BASE",{}"{}")\n\n'.format(' ' * 14, base_path))
         
         for dir in os.listdir(self.support_path):
-            mod_path = os.path.join(self.support_path, dir)
+            mod_path = initIOC_path_join(self.support_path, dir)
             if os.path.isdir(mod_path) and dir not in ['base', 'configure', 'utils', 'documentation', '.git', 'lib']:
-                envPaths_fp.write('epicsEnvSet("{}",{}"$(SUPPORT)/{}")\n'.format(self.get_env_paths_name(dir), ' ' * (24 - len(self.get_env_paths_name(dir))), dir))
+                mod_path = initIOC_path_join('$(SUPPORT)', dir)
+                envPaths_fp.write('epicsEnvSet("{}",{}"{}")\n'.format(self.get_env_paths_name(dir), ' ' * (24 - len(self.get_env_paths_name(dir))), mod_path))
 
         envPaths_fp.write('\n')
 
         for dir in os.listdir(self.areaDetector_path):
-            mod_path = os.path.join(self.areaDetector_path, dir)
+            mod_path = initIOC_path_join(self.areaDetector_path, dir)
             if os.path.isdir(mod_path) and dir not in ['configure', 'docs', 'documentation', 'ci', '.git', '']:
-                envPaths_fp.write('epicsEnvSet("{}",{}"$(AREA_DETECTOR)/{}")\n'.format(self.get_env_paths_name(dir), ' ' * (24 - len(self.get_env_paths_name(dir))), dir))
+                mod_path = initIOC_path_join('$(AREA_DETECTOR)', dir)
+                envPaths_fp.write('epicsEnvSet("{}",{}"{}")\n'.format(self.get_env_paths_name(dir), ' ' * (24 - len(self.get_env_paths_name(dir))), mod_path))
+
+        for elem in self.unique_env_blacklist:
+            if elem in action.epics_environment.keys():
+                envPaths_fp.write('\nepicsEnvSet("{}",{}"{}")\n'.format(elem, ' ' * (24 - len(elem)), action.epics_environment[elem]))
 
         envPaths_fp.close()
 
@@ -369,7 +400,7 @@ class IOCActionManager:
                 initIOC_print('WARNING - Could not find dbd and iocBoot folder, defaulting to use template.')
             from_template = True
         
-        if os.path.exists(os.path.join(self.ioc_top, action.ioc_name)):
+        if os.path.exists(initIOC_path_join(self.ioc_top, action.ioc_name)):
             initIOC_print('ERROR - IOC with name {} already exists in {}.'.format(action.ioc_name, self.ioc_top))
             return
 
@@ -380,26 +411,29 @@ class IOCActionManager:
 
         self.create_config_file(action)
         #self.make_ignore_files(action) TODO
+        initIOC_print('Done.')
 
 
     def create_config_file(self, action):
 
-        ioc_path = os.path.join(self.ioc_top, action.ioc_name)
-        config_fp = open(os.path.join(ioc_path, 'config'), 'w')
+        initIOC_print('Generating config file for use with procServ...')
+        ioc_path = initIOC_path_join(self.ioc_top, action.ioc_name)
+        config_fp = open(initIOC_path_join(ioc_path, 'config'), 'w')
         config_fp.write('NAME={}\nPORT={}\nUSER=softioc\nHOST={}\n'.format(action.ioc_name, action.ioc_port, action.epics_environment['HOSTNAME']))
         config_fp.close()
 
 
     def create_ioc_from_bundle(self, action, executable_path, dbd_path, iocBoot_path):
 
-        ioc_path = os.path.join(self.ioc_top, action.ioc_name)
+        initIOC_print('Generating IOC from detected bundle located at: {}'.format(self.binary_location))
+        ioc_path = initIOC_path_join(self.ioc_top, action.ioc_name)
         os.mkdir(ioc_path)
-        os.mkdir(os.path.join(ioc_path, 'autosave'))
+        os.mkdir(initIOC_path_join(ioc_path, 'autosave'))
 
         current_base_len = 0
         current_base = None
         for file in os.listdir(iocBoot_path):
-            next = os.path.join(iocBoot_path, file)
+            next = initIOC_path_join(iocBoot_path, file)
             if os.path.isfile(next) and file.startswith('st'):
                 fp = open(next, 'r')
                 lines = fp.readlines()
@@ -415,44 +449,47 @@ class IOCActionManager:
         self.genertate_st_cmd(action, executable_path, current_base, dbd_path=dbd_path)
         self.generate_unique_cmd(action)
         self.generate_env_paths(action)
-        self.grab_dependencies_from_bundle(ioc_path, iocBoot_path)
+        if self.with_deps:
+            self.grab_dependencies_from_bundle(ioc_path, iocBoot_path)
 
     
     def grab_dependencies_from_bundle(self, ioc_path, iocBoot_path):
 
+        initIOC_print('Collecting additional iocBoot files from bundle...')
         for file in os.listdir(iocBoot_path):
-            target = os.path.join(iocBoot_path, file)
+            target = initIOC_path_join(iocBoot_path, file)
             if os.path.isfile(target) and not file.startswith(('Makefile', 'st', 'test', 'READ', 'dll', 'envPaths')):
-                shutil.copyfile(target, os.path.join(ioc_path, file))
+                shutil.copyfile(target, initIOC_path_join(ioc_path, file))
 
 
     def create_ioc_from_template(self, action, executable_path):
 
-        ioc_path = os.path.join(self.ioc_top, action.ioc_name)
+        ioc_path = initIOC_path_join(self.ioc_top, action.ioc_name)
 
         # First, clone the template:
         out = subprocess.call(["git", "clone", "--quiet", "https://github.com/epicsNSLS2-deploy/ioc-template", ioc_path])
         if out != 0:
             initIOC_print('ERROR - Failed to clone IOC template, aborting...')
         else:
-            os.remove(os.path.join(ioc_path, 'st.cmd'))
-            os.remove(os.path.join(ioc_path, 'unique.cmd'))
-            os.remove(os.path.join(ioc_path, 'envPaths'))
-            os.remove(os.path.join(ioc_path, 'config'))
-            startup_scripts = os.path.join(ioc_path, 'startupScripts')
-            self.genertate_st_cmd(action, executable_path, os.path.join(startup_scripts, '{}St.cmd'.format(action.basename)))
+            initIOC_print('Generating IOC from ioc-template (https://github.com/epicsNSLS2-deploy/ioc-temlpate)')
+            os.remove(initIOC_path_join(ioc_path, 'st.cmd'))
+            os.remove(initIOC_path_join(ioc_path, 'unique.cmd'))
+            os.remove(initIOC_path_join(ioc_path, 'envPaths'))
+            os.remove(initIOC_path_join(ioc_path, 'config'))
+            startup_scripts = initIOC_path_join(ioc_path, 'startupScripts')
+            self.genertate_st_cmd(action, executable_path, initIOC_path_join(startup_scripts, '{}St.cmd'.format(action.basename)))
             self.generate_unique_cmd(action)
             self.generate_env_paths(action)
             
-            autosave_file_path = os.path.join(ioc_path, 'autosaveFiles')
-            dep_file_path = os.path.join(ioc_path, 'dependancyFiles')
+            autosave_file_path = initIOC_path_join(ioc_path, 'autosaveFiles')
+            dep_file_path = initIOC_path_join(ioc_path, 'dependancyFiles')
             for file in os.listdir(autosave_file_path):
                 if file.startswith(action.basename):
-                    shutil.copyfile(os.path.join(autosave_file_path, file), os.path.join(ioc_path, 'auto_settings.req'))
+                    shutil.copyfile(initIOC_path_join(autosave_file_path, file), initIOC_path_join(ioc_path, 'auto_settings.req'))
             for file in os.listdir(dep_file_path):
                 if file.startswith(action.basename):
-                    shutil.copyfile(os.path.join(dep_file_path, file), os.path.join(ioc_path, file.split('{}_'.format(action.basename))))
-                    self.fix_macros(os.path.join(ioc_path, file.split('{}_'.format(action.basename))))
+                    shutil.copyfile(initIOC_path_join(dep_file_path, file), initIOC_path_join(ioc_path, file.split('{}_'.format(action.basename))))
+                    self.fix_macros(initIOC_path_join(ioc_path, file.split('{}_'.format(action.basename))))
 
             self.cleanup_template(action, ioc_path)
 
@@ -484,10 +521,10 @@ class IOCActionManager:
         initIOC_print('Performing cleanup for {}'.format(action.ioc_name))
         try:
             if platform == "win32":
-                cleanup_script = os.path.join(ioc_path, 'cleanup.bat')
+                cleanup_script = initIOC_path_join(ioc_path, 'cleanup.bat')
                 out = subprocess.call([cleanup_script])
             else:
-                cleanup_script = os.path.join(ioc_path, 'cleanup.sh')
+                cleanup_script = initIOC_path_join(ioc_path, 'cleanup.sh')
                 out = subprocess.call(['bash', cleanup_script])
 
             os.remove(cleanup_script)
@@ -1236,6 +1273,9 @@ def parse_args():
     parser.add_argument('-g', '--gui',              action='store_true', help='Add this flag to enable the GUI version of initIOC.')
     parser.add_argument('-l', '--setlibrarypath',   action='store_true', help='This flag should be added to set library path before startup script is run.')
     parser.add_argument('-t', '--template',         action='store_true', help='This flag will tell initIOC to use an st.cmd template. These are more likely to process without error, but may be somewhat out of date.')
+    parser.add_argument('-c', '--clean',            action='store_true', help='This flag specifies if initIOC should attempt to generate a minimal IOC. May result in some missing files that will need manual tweaks.')
+    # TODO
+    #parser.add_argument('-r', '--readioc',          help='When this flag is active, an existing IOC is parsed into a CONFIGURE file, which can be tweaked to generate new IOCs for the same device.')
     parser.add_argument('-n', '--number',           help='Add this flag followed by a number to set an initial value for the IOC counter')
     arguments = vars(parser.parse_args())
     return arguments
@@ -1251,7 +1291,7 @@ if __name__ == '__main__':
 
     if not arguments['interactive']:
         actions, configuration, binaries_flat = read_ioc_config(initial_num)
-        manager = IOCActionManager(configuration['IOC_DIR'], configuration['TOP_BINARY_DIR'], binaries_flat, arguments['setlibrarypath'], arguments['template'])
+        manager = IOCActionManager(configuration['IOC_DIR'], configuration['TOP_BINARY_DIR'], binaries_flat, arguments['setlibrarypath'], arguments['template'], not arguments['clean'])
         for action in actions:
             action.epics_environment['HOSTNAME'] = configuration['HOSTNAME']
             action.epics_environment['EPICS_CA_ADDR_LIST'] = configuration['CA_ADDRESS']
@@ -1271,7 +1311,7 @@ if __name__ == '__main__':
             init_iocs_cli(initial_num, actions, manager)
     else:
         ioc_top, bin_top, bin_flat = prompt_for_top_dirs()
-        manager = IOCActionManager(ioc_top, bin_top, bin_flat, arguments['setlibrarypath'], arguments['template'])
+        manager = IOCActionManager(ioc_top, bin_top, bin_flat, arguments['setlibrarypath'], arguments['template'], not arguments['clean'])
         guided_init_iocs(initial_num, manager)
 
     
