@@ -12,6 +12,7 @@ Author: Jakub Wlodek
 # imports
 import os
 import re
+import time
 import shutil
 import subprocess
 import argparse
@@ -76,6 +77,7 @@ config_tooltips = {
     'CA_ADDRESS' :      'Channel access address list IP'
 }
 
+ad_plugins = ['ADCompVision', 'ADPluginBar', 'ADPluginEdge', 'ADPluginDmtx']
 
 #-------------------------------------------------
 #------------ INTERNAL DATA MODEL CLASS ----------
@@ -215,8 +217,8 @@ class IOCActionManager:
         if os.path.exists(self.areaDetector_path) and os.path.isdir(self.areaDetector_path):
             for dir in os.listdir(self.areaDetector_path):
                 mod_path = initIOC_path_join(self.areaDetector_path, dir)
-                if os.path.isdir(mod_path) and (dir == 'ADCore' or dir == 'ADSupport' or dir == action.ioc_type):
-                    self.get_lib_path_for_module(mod_path, arch, delimeter)
+                if os.path.isdir(mod_path) and (dir == 'ADCore' or dir == 'ADSupport' or dir in ad_plugins or dir == action.ioc_type):
+                    lib_path_str = lib_path_str + self.get_lib_path_for_module(mod_path, arch, delimeter)
 
         lib_path_str = lib_path_str + closer
         return lib_path_str
@@ -279,7 +281,7 @@ class IOCActionManager:
 
         lines = st_base_fp.readlines()
         for line in lines:
-            if line.startswith('#') or 'unique.cmd' in line or 'envPaths' in line:
+            if line.startswith('#!') or 'unique.cmd' in line or 'envPaths' in line or (line.startswith('#') and not self.with_deps):
                 pass
             elif line.startswith('dbLoadDatabase') and dbd_path is not None:
                 dbd_file = initIOC_path_join('$({})'.format(action.ioc_type.upper()), dbd_path)
@@ -411,7 +413,7 @@ class IOCActionManager:
 
         self.create_config_file(action)
         #self.make_ignore_files(action) TODO
-        initIOC_print('Done.')
+        initIOC_print('Done.\n')
 
 
     def create_config_file(self, action):
@@ -426,6 +428,7 @@ class IOCActionManager:
     def create_ioc_from_bundle(self, action, executable_path, dbd_path, iocBoot_path):
 
         initIOC_print('Generating IOC from detected bundle located at: {}'.format(self.binary_location))
+        time.sleep(0.3)
         ioc_path = initIOC_path_join(self.ioc_top, action.ioc_name)
         os.mkdir(ioc_path)
         os.mkdir(initIOC_path_join(ioc_path, 'autosave'))
@@ -449,17 +452,19 @@ class IOCActionManager:
         self.genertate_st_cmd(action, executable_path, current_base, dbd_path=dbd_path)
         self.generate_unique_cmd(action)
         self.generate_env_paths(action)
-        if self.with_deps:
-            self.grab_dependencies_from_bundle(ioc_path, iocBoot_path)
+        self.grab_dependencies_from_bundle(ioc_path, iocBoot_path, self.with_deps)
 
     
-    def grab_dependencies_from_bundle(self, ioc_path, iocBoot_path):
+    def grab_dependencies_from_bundle(self, ioc_path, iocBoot_path, with_optional_deps):
 
         initIOC_print('Collecting additional iocBoot files from bundle...')
         for file in os.listdir(iocBoot_path):
             target = initIOC_path_join(iocBoot_path, file)
-            if os.path.isfile(target) and not file.startswith(('Makefile', 'st', 'test', 'READ', 'dll', 'envPaths')):
-                shutil.copyfile(target, initIOC_path_join(ioc_path, file))
+            if os.path.isfile(target):
+                if file == 'auto_settings.req':
+                    shutil.copyfile(target, initIOC_path_join(ioc_path, file))
+                elif with_optional_deps and not file.startswith(('Makefile', 'st', 'test', 'READ', 'dll', 'envPaths')):
+                    shutil.copyfile(target, initIOC_path_join(ioc_path, file))
 
 
     def create_ioc_from_template(self, action, executable_path):
@@ -809,7 +814,7 @@ def guided_init_iocs(initial_ioc_num, manager):
         if another != 'y':
             another_ioc = False
             ioc_num = ioc_num + 1
-    initIOC_print('Done.')
+    initIOC_print('Exiting...')
 
 
 def init_iocs_cli(initial_ioc_number, actions, manager):

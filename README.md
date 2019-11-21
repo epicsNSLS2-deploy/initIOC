@@ -1,6 +1,6 @@
 # initIOC
 
-Script for generating camera IOCs from the [ioc-template](https://github.com/epicsNSLS2-deploy/ioc-template).
+Script for generating camera IOCs from areaDetector bundles or using the [ioc-template](https://github.com/epicsNSLS2-deploy/ioc-template).
 
 ### Usage
 
@@ -44,8 +44,12 @@ You may also utilize certain optional command line flags with initIOC:
 Option | Description
 ------|------------
 -h / --help | Prints help information
--i / --individual | Gives you a guided process for initializing IOCs one at a time
+-i / --interactive | Gives you a guided process for initializing IOCs one at a time
 -g / --gui | Starts the GUI version of initIOC
+-t / --template | Use a premade ioc template instead of reading from bundle's iocBoot.
+-c / --clean | Generate a minimal IOC. No comments, no additional files from iocBoot.
+-l / --setlibrarypath | Generate a call to set the library path for all modules in bundle. Used for non-statically built bundles.
+-n / --number NUMBER | Use to give an initial number for the IOC counter.
 
 **NOTE: as of v0.0.5, the GUI version of initIOC is available, along with the BINARIES_FLAT configuration setting being depracated.**
 
@@ -58,7 +62,9 @@ Additional settings are available in the menubar. From there you may toggle popu
 
 ### Currently supported drivers
 
-initIOCs.py relies on [ioc-template](https://github.com/epicsNSLS2-deploy/ioc-template) to deploy its IOCs, and as a result, IOC support is limited to those drivers that have startup scripts located in `ioc-template`. Currently this includes:
+There are two primary ways that `initIOC` can be used to generate IOCs. By default, it attempts to convert the `iocBoot` directory of the given driver into a structured IOC. When using this mode, any driver ioc can be generated provided the `iocBoot` directory can be found.
+
+Alternatively, when using the `-t` flag, `initIOCs.py` relies on [ioc-template](https://github.com/epicsNSLS2-deploy/ioc-template) to deploy its IOCs, and as a result, IOC support is limited to those drivers that have startup scripts located in `ioc-template`. Currently this includes:
 * ADAndor3
 * ADLambda
 * ADUVC
