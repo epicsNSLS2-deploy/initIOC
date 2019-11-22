@@ -1,0 +1,16 @@
+This file contains instructions for deploying IOCs for each detector.
+Any detector not listed here is not guaranteed to be able to successfully generated.
+For each you must edit the CONFIGURE file first, or add the -i or -g flags to the ones below.
+
+ADSimDetector
+-------------
+./initIOCs.py -c
+
+
+ADProsilica
+-----------
+./initIOCs.py
+
+ADPointGrey
+-----------
+./initIOCs.py -l
