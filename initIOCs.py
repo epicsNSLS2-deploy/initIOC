@@ -177,7 +177,7 @@ class IOCActionManager:
                     iocBoot_path = initIOC_path_join(iocBoot_path, dir)
                     break
             return executable_path, dbd_path.split('{}'.format(action.ioc_type))[1][1:], iocBoot_path
-        except FileNotFoundError:
+        except:
             return None, None, None
 
 
