@@ -17,6 +17,7 @@ import shutil
 import subprocess
 import argparse
 import datetime
+import sys
 from sys import platform
 
 # Include guard in case user doesn't have tkinter installed but still wants to use the CLI version
@@ -39,7 +40,7 @@ USING_GUI=False
 GUI_TOP_WINDOW=None
 
 # version number
-version = "v0.1.0"
+__version__ = "v0.1.0"
 
 
 #-------------------------------------------------
@@ -49,7 +50,8 @@ version = "v0.1.0"
 # Bash shebang length limit is 127 characters, so we need to make sure we account for that
 KERNEL_PATH_LIMIT = 127
 
-# list of currently supported drivers. Also used for dropdown in GUI
+
+# list of currently supported drivers (for template based generation). Also used for dropdown in GUI
 supported_drivers = [
     'ADProsilica',
     'ADUVC',
@@ -77,6 +79,8 @@ config_tooltips = {
     'CA_ADDRESS' :      'Channel access address list IP'
 }
 
+
+# Some default values for generating a temporary CONFIGURE file.
 base_configuration = {
     'IOC_DIR' :         '/epics/iocs',
     'TOP_BINARY_DIR' :  '/epics/src',
@@ -86,10 +90,35 @@ base_configuration = {
     'CA_ADDRESS' :      '127.0.0.255'
 }
 
+# Certain drivers don't have their connection parameter as the second element (index 1) in the 
+# Config() call. In that case, you must add them to this dictionary, and give the index
+# of the camera connection parameter.
+connection_parameter_index = {
+    'ADUVC' : 2
+}
+
+# Certain drivers already include an existing connection parameter environment variable.
+# This is no longer required, since CAM-CONNECT is used instead.
+existing_connection_parameter = {
+    "ADEiger"       : "EIGER_IP",
+    "ADAravis"      : "CAMERA_NAME",
+    "ADVimba"       : "CAMERA_ID",
+    "ADSpinnaker"   : "CAMERA_ID",
+
+}
+
+
+# List of drivers that don't have connection parameters
+no_connection_param_drivers = ['ADSimDetector']
+
+
+# On windows default to C directory
 if platform == 'win32':
     base_configuration['IOC_DIR'] = 'C:' + base_configuration['IOC_DIR']
     base_configuration['TOP_BINARY_DIR'] = 'C:' + base_configuration['TOP_BINARY_DIR']
 
+
+# External areaDetector plugins
 ad_plugins = ['ADCompVision', 'ADPluginBar', 'ADPluginEdge', 'ADPluginDmtx']
 
 #-------------------------------------------------
@@ -98,6 +127,11 @@ ad_plugins = ['ADCompVision', 'ADPluginBar', 'ADPluginEdge', 'ADPluginDmtx']
 
 
 def initIOC_path_join(path_A, path_B):
+    """Function that joins two paths.
+
+    All paths use / instead of \\ for simplicity.
+    """
+
     output_path = path_A
     if not path_A.endswith('/'):
         output_path = output_path + '/'
@@ -120,8 +154,23 @@ class IOCActionManager:
         self.set_lib_path       = set_lib_path
         self.use_template       = use_template
         self.with_deps          = with_deps
-        self.unique_env_blacklist = ['EPICS_DB_INCLUDE_PATH']
         self.update_mod_paths()
+
+
+    def deployment_info(self, action):
+        info = ''
+        info = info + '#\n# {} IOC deployed using initIOC {}\n'.format(action.ioc_type, __version__)
+        info = info + '# Initial target bundle location: {}\n'.format(self.binary_location)
+        if self.use_template:
+            info = info + '# IOC generated from: https://github.com/epicsNSLS2-deploy/ioc-template\n'
+        else:
+            _, _, iocBoot_path = self.find_paths_for_action(action)
+            if iocBoot_path is not None:
+                info = info + '# IOC generated from: {}\n'.format(iocBoot_path)
+
+        info = info + '#{}\n'.format('-' * 64)
+        return info
+
 
     def update_mod_paths(self):
         self.base_path = initIOC_path_join(self.binary_location, 'base')
@@ -288,7 +337,11 @@ class IOCActionManager:
 
         if not exec_written:
             st.write('#!{}\n\n'.format(executable_path))
-        st.write('< unique.cmd\n\n< envPaths\n\n')
+
+        st.write('< envPaths\n\n< unique.cmd\n\nerrlogInit(20000)\n\n')
+        if dbd_path is not None:
+            dbd_file = initIOC_path_join('$({})'.format(action.ioc_type.upper()), dbd_path)
+            st.write('dbLoadDatabase({})\n'.format(dbd_file))
 
         st_base_fp = open(st_base_path, 'r')
 
@@ -296,13 +349,17 @@ class IOCActionManager:
         for line in lines:
             if line.startswith('#!') or 'unique.cmd' in line or 'envPaths' in line or (line.startswith('#') and not self.with_deps):
                 pass
-            elif line.startswith('dbLoadDatabase') and dbd_path is not None:
-                dbd_file = initIOC_path_join('$({})'.format(action.ioc_type.upper()), dbd_path)
-                st.write('dbLoadDatabase({})\n'.format(dbd_file))
-            elif 'Config(' in line and action.ioc_type != 'ADSimDetector' and '$(CAM-CONNECT)' not in line:
+            elif line.startswith('#'):
+                st.write(line)
+            elif line.startswith('dbLoadDatabase') and dbd_path is not None or line.startswith('errlogInit'):
+                pass
+            elif 'Config(' in line and action.ioc_type not in no_connection_param_drivers and '$(CAM-CONNECT)' not in line:
                 try:
                     temp = line.split(',')
-                    temp[1] = '"$(CAM-CONNECT)"'
+                    index = 1
+                    if action.ioc_type in connection_parameter_index.keys():
+                        index = connection_parameter_index[action.ioc_type]
+                    temp[index] = '"$(CAM-CONNECT)"'
                     updated = temp[0]
                     for i in range(1, len(temp)):
                         updated = updated + ',' + temp[i]
@@ -319,7 +376,21 @@ class IOCActionManager:
         st_base_fp.close()
         st.close()
 
+        self.grab_additional_env(action, st_base_path)
         os.chmod(initIOC_path_join(ioc_path, "st.cmd"), 0o755)
+
+    
+    def grab_additional_env(self, action, st_base_path):
+        iocBoot_dir = os.path.dirname(st_base_path)
+        st_file = os.path.basename(st_base_path)
+        for file in os.listdir(iocBoot_dir):
+            if file.startswith('st.cmd') and file != st_file:
+                fp = open(os.path.join(iocBoot_dir, file), 'r')
+                lines = fp.readlines()
+                for line in lines:
+                    if line.startswith('epicsEnvSet'):
+                        action.add_to_environment(line)
+                fp.close()
 
 
     def generate_unique_cmd(self, action):
@@ -328,14 +399,26 @@ class IOCActionManager:
         ioc_path = initIOC_path_join(self.ioc_top, action.ioc_name)
         unique_fp = open(initIOC_path_join(ioc_path, 'unique.cmd'), 'w')
 
-        unique_fp.write('######################################\n')
-        unique_fp.write('# initIOC Auto-Generated Unique File #\n')
-        unique_fp.write('######################################\n\n\n')
+        unique_fp.write('#############################################\n')
+        unique_fp.write('# initIOC Auto-Generated Unique File        #\n')
+        unique_fp.write('# Generated: {:<31}#\n'.format(str(datetime.datetime.now())))
+        if 'ENGINEER' in action.epics_environment.keys():
+            unique_fp.write('# Deploying Engineer: {:<22}#\n'.format(action.epics_environment['ENGINEER']))
+        unique_fp.write('#############################################\n\n\n')
 
-        unique_fp.write('epicsEnvSet("{}",{}"{}")\n\n'.format('SUPPORT_DIR', ' ' * 20, self.support_path))
+        unique_fp.write(self.deployment_info(action)+'\n\n')
+
         for env_var in action.epics_environment.keys():
-            if env_var not in self.unique_env_blacklist:
+            write_env_var = True
+            if action.ioc_type in existing_connection_parameter.keys():
+                if env_var == existing_connection_parameter[action.ioc_type]:
+                    write_env_var = False
+                elif env_var == 'CAM-CONNECT':
+                    unique_fp.write('# {}'.format(existing_connection_parameter[action.ioc_type]))
+                    
+            if write_env_var:
                 unique_fp.write('epicsEnvSet("{}",{}"{}")\n'.format(env_var, ' ' * (32 - len(env_var)), action.epics_environment[env_var]))
+
 
         unique_fp.close()
 
@@ -362,20 +445,22 @@ class IOCActionManager:
         if platform == 'win32':
             arch = 'windows-x64-static'
 
+        envPaths_fp.write('# Path propagated to remaining envPaths (binary bundle location)\nepicsEnvSet("BINARY_TOP", "{}")\n\n'.format(self.binary_location))
         envPaths_fp.write('epicsEnvSet("ARCH", "{}")\n'.format(arch))
         envPaths_fp.write('epicsEnvSet("TOP", "${PWD}")\n')
-        envPaths_fp.write('epicsEnvSet("SUPPORT",{}"$(SUPPORT_DIR)")\n\n'.format(' ' * 17))
 
-        if self.binaries_flat:
-            base_path = initIOC_path_join('$(SUPPORT)', 'base')
-        else:
-            base_path = initIOC_path_join('$(SUPPORT)', initIOC_path_join('..', 'base'))
-        
-        envPaths_fp.write('epicsEnvSet("EPICS_BASE",{}"{}")\n\n'.format(' ' * 14, base_path))
+        base_path = initIOC_path_join('$(BINARY_TOP)', 'base')
+        envPaths_fp.write('epicsEnvSet("EPICS_BASE",{}"{}")\n'.format((' ' * 14), base_path))
+
+        support_path = "$(BINARY_TOP)"
+        if not self.binaries_flat:
+            support_path = initIOC_path_join(support_path, "support")
+
+        envPaths_fp.write('epicsEnvSet("SUPPORT",{}"{}")\n\n'.format((' ' * 17), support_path))
         
         for dir in os.listdir(self.support_path):
             mod_path = initIOC_path_join(self.support_path, dir)
-            if os.path.isdir(mod_path) and dir not in ['base', 'configure', 'utils', 'documentation', '.git', 'lib']:
+            if os.path.isdir(mod_path) and dir not in ['base', 'configure', 'utils', 'documentation', '.git', 'lib', 'bin']:
                 mod_path = initIOC_path_join('$(SUPPORT)', dir)
                 envPaths_fp.write('epicsEnvSet("{}",{}"{}")\n'.format(self.get_env_paths_name(dir), ' ' * (24 - len(self.get_env_paths_name(dir))), mod_path))
 
@@ -386,10 +471,6 @@ class IOCActionManager:
             if os.path.isdir(mod_path) and dir not in ['configure', 'docs', 'documentation', 'ci', '.git', '']:
                 mod_path = initIOC_path_join('$(AREA_DETECTOR)', dir)
                 envPaths_fp.write('epicsEnvSet("{}",{}"{}")\n'.format(self.get_env_paths_name(dir), ' ' * (24 - len(self.get_env_paths_name(dir))), mod_path))
-
-        for elem in self.unique_env_blacklist:
-            if elem in action.epics_environment.keys():
-                envPaths_fp.write('\nepicsEnvSet("{}",{}"{}")\n'.format(elem, ' ' * (24 - len(elem)), action.epics_environment[elem]))
 
         envPaths_fp.close()
 
@@ -614,6 +695,9 @@ class IOCAction:
         self.ioc_type           = ioc_type
         self.basename           = ioc_type[2:].lower()
         self.ioc_num            = ioc_num
+
+        # These epics environment variables are set by the user for each IOC
+        self.user_entered_env = ['ENGINEER', 'PORT', 'IOC', 'CAM-CONNECT', 'PREFIX', 'CTPREFIX', 'HOSTNAME', 'IOCNAME']
         
         self.asyn_port          = asyn_port
         self.epics_environment['ENGINEER']  = 'NA'
@@ -655,7 +739,7 @@ class IOCAction:
         line_s = re.sub(' +', '', line_s)
         line_s = re.sub('epicsEnvSet', '', line_s)
         temp = line_s.split(',')
-        if temp[0][1:] not in self.epics_environment.keys():
+        if temp[0][1:] not in self.user_entered_env:
             self.epics_environment[temp[0][1:]] = temp[1][:-1]
 
 
@@ -710,9 +794,15 @@ def read_ioc_config(initial_ioc_number):
     """
 
     if not os.path.exists("CONFIGURE"):
+        
         initIOC_print('\nCONFIGURE file not found, attempting to generate one.')
+        if not os.access('.', os.W_OK):
+            initIOC_print('ERROR! - Cannot create CONFIGURE file, insufficient permissions.\nAborting...')
+            exit()
         try:
             enter_config_info()
+            initIOC_print("CONFIGURE file generated. Add IOCs to the table, and rerun initADIOC -p.")
+            exit()
         except PermissionError:
             initIOC_print("No write permissions in {}. Exiting...".format(os.getcwd()))
             exit()
@@ -748,8 +838,8 @@ def print_start_message():
     """ Function for printing initial message """
 
     initIOC_print("+----------------------------------------------------------------+")
-    initIOC_print("+ initIOCs, Version: " + version +"                                      +")
-    initIOC_print("+ Author: Jakub Wlodek                                           +")
+    initIOC_print("+ initIOCs, Version: " + __version__ +"                                      +")
+    initIOC_print("+ Python Version: {}, OS platform: {:<27}+".format(sys.version.split()[0], platform))
     initIOC_print("+ Copyright (c): Brookhaven National Laboratory 2018-2019        +")
     initIOC_print("+ This software comes with NO warranty!                          +")
     initIOC_print("+----------------------------------------------------------------+")
@@ -1374,6 +1464,7 @@ def main():
         actions, configuration, binaries_flat = read_ioc_config(initial_num)
         manager = IOCActionManager(configuration['IOC_DIR'], configuration['TOP_BINARY_DIR'], binaries_flat, arguments['setlibrarypath'], arguments['template'], not arguments['clean'])
         for action in actions:
+            action.epics_environment['ENGINEER'] = configuration['ENGINEER']
             action.epics_environment['HOSTNAME'] = configuration['HOSTNAME']
             action.epics_environment['EPICS_CA_ADDR_LIST'] = configuration['CA_ADDRESS']
         if arguments['gui']:
