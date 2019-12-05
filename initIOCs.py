@@ -140,21 +140,30 @@ def initIOC_path_join(path_A, path_B):
     else:
         output_path = output_path + path_B
 
+    if output_path.endswith('/'):
+        output_path = output_path[:-1]
+
     return output_path
 
 
 class IOCActionManager:
 
-    def __init__(self, ioc_top, binary_location, binaries_flat, set_lib_path, use_template, with_deps):
+    def __init__(self, ioc_top, binary_location, set_lib_path, use_template, with_deps):
 
         self.ioc_top            = ioc_top
         self.ioc_top_created    = False
         self.binary_location    = binary_location
-        self.binaries_flat      = binaries_flat
+        self.binaries_flat      = self.check_binaries_flat()
         self.set_lib_path       = set_lib_path
         self.use_template       = use_template
         self.with_deps          = with_deps
         self.update_mod_paths()
+
+
+    def check_binaries_flat(self):
+        if os.path.exists(initIOC_path_join(self.binary_location, 'support')):
+            return False
+        return True
 
 
     def deployment_info(self, action):
@@ -173,6 +182,7 @@ class IOCActionManager:
 
 
     def update_mod_paths(self):
+        self.binaries_flat = self.check_binaries_flat()
         self.base_path = initIOC_path_join(self.binary_location, 'base')
         if self.binaries_flat:
             self.support_path = self.binary_location
@@ -384,7 +394,7 @@ class IOCActionManager:
         iocBoot_dir = os.path.dirname(st_base_path)
         st_file = os.path.basename(st_base_path)
         for file in os.listdir(iocBoot_dir):
-            if file.startswith('st.cmd') and file != st_file:
+            if file.startswith('st') and file.endswith('.cmd') and file != st_file:
                 fp = open(os.path.join(iocBoot_dir, file), 'r')
                 lines = fp.readlines()
                 for line in lines:
@@ -810,7 +820,6 @@ def read_ioc_config(initial_ioc_number):
     ioc_config_file = open("CONFIGURE", "r")
     ioc_actions = []
     configuration = {}
-    bin_flat = True
     ioc_num_counter = 1
 
     line = ioc_config_file.readline()
@@ -828,10 +837,7 @@ def read_ioc_config(initial_ioc_number):
         line = ioc_config_file.readline()
 
     ioc_config_file.close()
-    if os.path.exists(configuration['TOP_BINARY_DIR']):
-        if os.path.exists(os.path.join(configuration['TOP_BINARY_DIR'], 'support')):
-            bin_flat = False
-    return ioc_actions, configuration, bin_flat
+    return ioc_actions, configuration
 
 
 def print_start_message():
@@ -882,17 +888,12 @@ def prompt_for_top_dirs(with_welcome=True):
         else:
             valid = True
 
-    bin_flat = True
-    if os.path.exists(binaries_top):
-        if os.path.exists(os.path.join(binaries_top, 'support')):
-            bin_flat = False
-
-    return ioc_top, binaries_top, bin_flat
+    return ioc_top, binaries_top
 
 
 def enter_config_info():
     initIOC_print('Please enter all pertinent information.\n')
-    ioc_top, bin_top, bin_flat = prompt_for_top_dirs(with_welcome=False)
+    ioc_top, bin_top = prompt_for_top_dirs(with_welcome=False)
     configuration = {}
     configuration['IOC_DIR'] = ioc_top
     configuration['TOP_BINARY_DIR'] = bin_top
@@ -1241,10 +1242,7 @@ class InitIOCGui:
         self.manager.ioc_top = self.configuration['IOC_DIR']
         self.manager.binary_location = self.configuration['TOP_BINARY_DIR']
 
-        self.manager.bin_flat = True
-        if os.path.exists(self.configuration['TOP_BINARY_DIR']):
-            if os.path.exists(os.path.join(self.configuration['TOP_BINARY_DIR'], 'support')):
-                self.manager.bin_flat = False
+        self.manager.binaries_flat = self.manager.check_binaries_flat()
 
         self.manager.update_mod_paths()
 
@@ -1443,14 +1441,9 @@ def main():
         if not os.path.exists(bin_top):
             initIOC_print('Selected bundle location does not exist.')
         else:
-            bin_flat = True
-            if os.path.exists(os.path.join(bin_top, 'support')):
-                bin_flat = False
             initIOC_print('Bundle selected: {}'.format(bin_top))
-            if bin_flat:
-                initIOC_print('Flat binary bundle structure detected.\n')
             initIOC_print('List of detected driver executables:\n+-----------------------------------------------')
-            manager= IOCActionManager('.', bin_top, bin_flat, False, False, False)
+            manager= IOCActionManager('.', bin_top, False, False, False)
             for dir in os.listdir(manager.areaDetector_path):
                 if os.path.isdir(os.path.join(manager.areaDetector_path, dir)):
                     action = IOCAction(dir, '', '', '', '', '', 0)
@@ -1461,8 +1454,8 @@ def main():
         exit()
 
     if arguments['parseconfigure'] or arguments['gui']:
-        actions, configuration, binaries_flat = read_ioc_config(initial_num)
-        manager = IOCActionManager(configuration['IOC_DIR'], configuration['TOP_BINARY_DIR'], binaries_flat, arguments['setlibrarypath'], arguments['template'], not arguments['clean'])
+        actions, configuration = read_ioc_config(initial_num)
+        manager = IOCActionManager(configuration['IOC_DIR'], configuration['TOP_BINARY_DIR'], arguments['setlibrarypath'], arguments['template'], not arguments['clean'])
         for action in actions:
             action.epics_environment['ENGINEER'] = configuration['ENGINEER']
             action.epics_environment['HOSTNAME'] = configuration['HOSTNAME']
@@ -1485,8 +1478,8 @@ def main():
                 exit()
             init_iocs_cli(initial_num, actions, manager)
     else:
-        ioc_top, bin_top, bin_flat = prompt_for_top_dirs()
-        manager = IOCActionManager(ioc_top, bin_top, bin_flat, arguments['setlibrarypath'], arguments['template'], not arguments['clean'])
+        ioc_top, bin_top = prompt_for_top_dirs()
+        manager = IOCActionManager(ioc_top, bin_top, arguments['setlibrarypath'], arguments['template'], not arguments['clean'])
         guided_init_iocs(initial_num, manager)
 
 

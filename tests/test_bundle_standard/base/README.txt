@@ -1,0 +1,1 @@
+This is just a folder representing base in a real bundle.
