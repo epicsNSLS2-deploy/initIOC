@@ -1,0 +1,4 @@
+NAME=test-sim1
+PORT=4040
+USER=softioc
+HOST=localhost

@@ -1,0 +1,1 @@
+This is just a folder representing where the real ADSupport would be in the bundle.

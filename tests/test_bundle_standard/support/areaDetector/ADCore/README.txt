@@ -1,0 +1,1 @@
+Folder representing location of ADCore in a real bundle.

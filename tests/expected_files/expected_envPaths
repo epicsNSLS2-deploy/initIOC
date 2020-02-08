@@ -1,0 +1,14 @@
+# Path propagated to remaining envPaths (binary bundle location)
+epicsEnvSet("BINARY_TOP", "./test_bundle_standard")
+
+epicsEnvSet("ARCH", "linux-x86_64")
+epicsEnvSet("TOP", "${PWD}")
+epicsEnvSet("EPICS_BASE",              "$(BINARY_TOP)/base")
+epicsEnvSet("SUPPORT",                 "$(BINARY_TOP)/support")
+
+epicsEnvSet("AREA_DETECTOR",           "$(SUPPORT)/areaDetector")
+epicsEnvSet("TESTMODULE",              "$(SUPPORT)/testModule")
+
+epicsEnvSet("ADSUPPORT",               "$(AREA_DETECTOR)/ADSupport")
+epicsEnvSet("ADCORE",                  "$(AREA_DETECTOR)/ADCore")
+epicsEnvSet("ADSIMDETECTOR",           "$(AREA_DETECTOR)/ADSimDetector")
