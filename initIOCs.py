@@ -345,13 +345,16 @@ class IOCActionManager:
         st_base_fp = open(st_base_path, 'r')
 
         lines = st_base_fp.readlines()
+        wrote_unique = False
         for line in lines:
-            if line.startswith('#!') or 'unique.cmd' in line or 'envPaths' in line or (line.startswith('#') and not self.with_deps):
+            if line.startswith('#!') or 'unique.cmd' in line or 'envPaths' in line:# or (line.startswith('#') and not self.with_deps):
                 pass
             elif line.startswith('#'):
                 st.write(line)
-            elif 'Config(' in line and action.ioc_type not in no_connection_param_drivers and '$(CAM-CONNECT)' not in line:
+            elif 'Config(' in line and not wrote_unique:
                 st.write('\n< unique.cmd\n\n')
+                st.write(line)
+                wrote_unique = True
                 #try:
                 #    temp = line.split(',')
                 #    index = 1
@@ -476,7 +479,7 @@ class IOCActionManager:
             envPaths_fp.close()
         
         else:
-            os.link(initIOC_path_join(ioc_boot_path, 'envPaths'), initIOC_path_join(target, 'envPaths'))
+            os.symlink(initIOC_path_join(ioc_boot_path, 'envPaths'), initIOC_path_join(target, 'envPaths'))
 
 
     def process_action(self, action):
@@ -563,7 +566,7 @@ class IOCActionManager:
                     if self.copy_files:
                         shutil.copyfile(target, initIOC_path_join(ioc_path, file))
                     else:
-                        os.link(initIOC_path_join(ioc_path, file), target)
+                        os.symlink(target, initIOC_path_join(ioc_path, file))
                 elif self.with_deps and not file.startswith(('Makefile', 'st', 'test', 'READ', 'dll', 'envPaths')):
                     shutil.copyfile(target, initIOC_path_join(ioc_path, file))
 
@@ -883,11 +886,11 @@ def prompt_for_top_dirs(with_welcome=True):
     while not valid:
         ioc_top        = input('Enter the ioc output location. > ')
         if not os.path.exists(os.path.dirname(ioc_top)):
-            initIOC_print('The selected ioc output directory does not exist, please try again.')
+            initIOC_print('\nThe selected ioc output directory does not exist, please try again.\n')
         elif os.path.isdir(ioc_top) and not os.access(ioc_top, os.W_OK):
-            initIOC_print('The selected output directory exists, but you do not have required permissions.')
+            initIOC_print('\nThe selected output directory exists, but you do not have required permissions.\n')
         elif not os.access(os.path.dirname(ioc_top), os.W_OK):
-            initIOC_print('You do not have permission to generate the IOC output directory.')
+            initIOC_print('\nYou do not have permission to generate the IOC output directory.\n')
         else:
             valid = True
     
@@ -895,7 +898,7 @@ def prompt_for_top_dirs(with_welcome=True):
     while not valid:
         binaries_top = input('Enter the location of your compiled binaries. > ')
         if not os.path.exists(binaries_top):
-            initIOC_print('The selected top binary directory does not exist, please try again.')
+            initIOC_print('\nThe selected top binary directory does not exist, please try again.\n')
         else:
             ret = search_bundle_for_drivers(binaries_top)
             if not ret:
