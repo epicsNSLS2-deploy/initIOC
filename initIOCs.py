@@ -151,7 +151,8 @@ class IOCActionManager:
         self.set_lib_path       = set_lib_path
         self.use_template       = use_template
         self.with_deps          = with_deps
-        self.copy_files = copy_files
+        self.copy_files         = copy_files
+        self.processed_actions  = []
         self.update_mod_paths()
 
 
@@ -349,8 +350,6 @@ class IOCActionManager:
                 pass
             elif line.startswith('#'):
                 st.write(line)
-            elif line.startswith('dbLoadDatabase') and dbd_path is not None or line.startswith('errlogInit'):
-                pass
             elif 'Config(' in line and action.ioc_type not in no_connection_param_drivers and '$(CAM-CONNECT)' not in line:
                 st.write('\n< unique.cmd\n\n')
                 #try:
@@ -496,9 +495,9 @@ class IOCActionManager:
             initIOC_print('ERROR - Could not find binary for {}, skipping...'.format(action.ioc_type))
             initIOC_print('Make sure binary for {} exists at binary path:\n{}'.format(action.ioc_type, self.binary_location))
             return
-        elif dbd_path is None or iocBoot_path is None:
+        elif ioc_top_path is None or iocBoot_path is None:
             if not from_template:
-                initIOC_print('WARNING - Could not find dbd and iocBoot folder, defaulting to use template.')
+                initIOC_print('WARNING - Could not ioc top and iocBoot folder, defaulting to use template.')
             from_template = True
         
         if os.path.exists(initIOC_path_join(self.ioc_top, action.ioc_name)):
@@ -750,8 +749,9 @@ class IOCAction:
         temp = line_s.split(',')
         if temp[0][1:] not in self.user_entered_env:
             self.epics_environment[temp[0][1:]] = temp[1][:-1]
-        if existing_connection_parameter[self.ioc_type] == temp[1][:-1]:
-            self.epics_environment[temp[0][1:]] = self.connection
+        if self.ioc_type in existing_connection_parameter.keys():
+            if existing_connection_parameter[self.ioc_type] == temp[1][:-1]:
+                self.epics_environment[temp[0][1:]] = self.connection
 
 
 
@@ -897,7 +897,12 @@ def prompt_for_top_dirs(with_welcome=True):
         if not os.path.exists(binaries_top):
             initIOC_print('The selected top binary directory does not exist, please try again.')
         else:
-            valid = True
+            ret = search_bundle_for_drivers(binaries_top)
+            if not ret:
+                initIOC_print('Please enter a binary location that includes compiled drivers.\n')
+            else:
+                initIOC_print('')
+                valid = True
 
     return ioc_top, binaries_top
 
@@ -951,19 +956,38 @@ def guided_init_iocs(manager):
             if driver_type is not None and not os.path.exists(os.path.join(manager.areaDetector_path, driver_type)):
                 initIOC_print('Could not find driver {} in {}.'.format(driver_type, os.path.join(manager.areaDetector_path, driver_type)))
                 driver_type = None
-        ioc_name = input('What should the IOC name be? > ')
-        dev_prefix = input('Please enter the device specific portion of the PV prefix (ex. {{BlackFly-Cam:1}}) > ')
-        asyn_port = input('What asyn port should the IOC use? (ex. PS1). > ')
-        ioc_port = input('What telnet port should procServer use to run the IOC? (ex. 4000) > ')
-        connection = input('Enter the connection parameter for your device. (ex. IP, serial number etc.) Enter NA if not sure. > ')
+
+        # Ask for IOC name
+        valid = False
+        while not valid:
+            ioc_name = input('What should the IOC name be? > ')
+            if os.path.exists(initIOC_path_join(manager.ioc_top, ioc_name)):
+                initIOC_print('\nIOC with name {} already exists!\n'.format(ioc_name))
+            else:
+                valid = True
+
+        # Ask for camera specific information
+        dev_prefix  = input('Please enter the device specific portion of the PV prefix (ex. {BlackFly-Cam:1}) > ')
+        asyn_port   = input('What asyn port should the IOC use? (ex. PS1). > ')
+        ioc_port    = input('What telnet port should procServer use to run the IOC? (ex. 4000) > ')
+        connection  = input('Enter the connection parameter for your device. (ex. IP, serial number etc.) Enter NA if not sure. > ')
+        
+        # Generate a Data model IOCAction object, and initialize its environment.
         ioc_action = IOCAction(driver_type, ioc_name, bl_prefix, dev_prefix, asyn_port, ioc_port, connection)
         ioc_action.epics_environment['HOSTNAME'] = hostname
         ioc_action.epics_environment['ENGINEER'] = engineer
         ioc_action.epics_environment['EPICS_CA_ADDR_LIST'] = ca_address_ip
+
+        # Execute the action
         manager.process_action(ioc_action)
         another = input('Would you like to generate another IOC? (y/n). > ')
         if another != 'y':
             another_ioc = False
+
+    #save = input('Would you like to save a configuration file from the generated IOCs? (y/n). > ')
+    #if save = 'y':
+        #manager.save_as_configure()
+
     initIOC_print('Exiting...')
 
 
@@ -1461,63 +1485,73 @@ def parse_args():
     return arguments
 
 
+def search_bundle_for_drivers(bin_top):
+    initIOC_print('\nBundle selected: {}'.format(bin_top))
+    initIOC_print('List of detected driver executables:\n+-----------------------------------------------')
+    manager= IOCActionManager('.', bin_top, False, False, False, False)
+    if not os.path.exists(manager.areaDetector_path):
+        initIOC_print('ERROR - No binaries found in location {}\n'.format(bin_top))
+        return False
+    for dir in os.listdir(manager.areaDetector_path):
+        if os.path.isdir(os.path.join(manager.areaDetector_path, dir)):
+            action = IOCAction(dir, '', '', '', '', '', 0)
+            ioc_top_path, bin_path, ioc_boot_path = manager.find_paths_for_action(action)
+            if bin_path is not None:
+                initIOC_print('+ {:<16} -   {}'.format(dir, bin_path))
+    return True
+
+
 # Run the script
 def main():
+
+    try:
     
-    arguments = parse_args()
+        arguments = parse_args()
 
-    global USING_GUI
-    global GUI_TOP_WINDOW
+        global USING_GUI
+        global GUI_TOP_WINDOW
 
-    if arguments['searchbundle'] is not None:
-        initIOC_print('\nSearching for driver executables...\n')
-        bin_top = arguments['searchbundle']
-        if not os.path.exists(bin_top):
-            initIOC_print('Selected bundle location does not exist.')
-        else:
-            initIOC_print('Bundle selected: {}'.format(bin_top))
-            initIOC_print('List of detected driver executables:\n+-----------------------------------------------')
-            manager= IOCActionManager('.', bin_top, False, False, False, False)
-            if not os.path.exists(manager.areaDetector_path):
-                initIOC_print('ERROR - No binaries found in location {}'.format(bin_top))
-                exit()
-            for dir in os.listdir(manager.areaDetector_path):
-                if os.path.isdir(os.path.join(manager.areaDetector_path, dir)):
-                    action = IOCAction(dir, '', '', '', '', '', 0)
-                    ioc_top_path, bin_path, ioc_boot_path = manager.find_paths_for_action(action)
-                    if bin_path is not None:
-                        initIOC_print('+ {:<16} -   {}'.format(dir, bin_path))
-        initIOC_print('')
-        exit()
-
-    if arguments['parseconfigure'] or arguments['gui']:
-        actions, configuration = read_ioc_config(initial_num)
-        manager = IOCActionManager(configuration['IOC_DIR'], configuration['TOP_BINARY_DIR'], arguments['setlibrarypath'], arguments['template'], not arguments['minimal'], arguments['copy'])
-        for action in actions:
-            action.epics_environment['ENGINEER'] = configuration['ENGINEER']
-            action.epics_environment['HOSTNAME'] = configuration['HOSTNAME']
-            action.epics_environment['EPICS_CA_ADDR_LIST'] = configuration['CA_ADDRESS']
-        if arguments['gui']:
-            if not WITH_GUI:
-                initIOC_print('ERROR - TKinter GUI package not installed. Please intall and rerun.')
-                exit()
+        if arguments['searchbundle'] is not None:
+            initIOC_print('\nSearching for driver executables...\n')
+            bin_top = arguments['searchbundle']
+            if not os.path.exists(bin_top):
+                initIOC_print('Selected bundle location does not exist.')
             else:
-                root = Tk()
-                USING_GUI = True
-                app = InitIOCGui(root, initial_num, configuration, actions, manager)
-                GUI_TOP_WINDOW = app
+                ret = search_bundle_for_drivers(bin_top)
+            initIOC_print('')
+            exit()
+
+        if arguments['parseconfigure'] or arguments['gui']:
+            actions, configuration = read_ioc_config(initial_num)
+            manager = IOCActionManager(configuration['IOC_DIR'], configuration['TOP_BINARY_DIR'], arguments['setlibrarypath'], arguments['template'], not arguments['minimal'], arguments['copy'])
+            for action in actions:
+                action.epics_environment['ENGINEER'] = configuration['ENGINEER']
+                action.epics_environment['HOSTNAME'] = configuration['HOSTNAME']
+                action.epics_environment['EPICS_CA_ADDR_LIST'] = configuration['CA_ADDRESS']
+            if arguments['gui']:
+                if not WITH_GUI:
+                    initIOC_print('ERROR - TKinter GUI package not installed. Please intall and rerun.')
+                    exit()
+                else:
+                    root = Tk()
+                    USING_GUI = True
+                    app = InitIOCGui(root, configuration, actions, manager)
+                    GUI_TOP_WINDOW = app
+                    print_start_message()
+                    root.mainloop()
+            else:
                 print_start_message()
-                root.mainloop()
+                if len(actions) == 0:
+                    initIOC_print('No IOCs set for generation, please edit the CONFIGURE file.')
+                    exit()
+                init_iocs_cli(actions, manager)
         else:
-            print_start_message()
-            if len(actions) == 0:
-                initIOC_print('No IOCs set for generation, please edit the CONFIGURE file.')
-                exit()
-            init_iocs_cli(initial_num, actions, manager)
-    else:
-        ioc_top, bin_top = prompt_for_top_dirs()
-        manager = IOCActionManager(ioc_top, bin_top, arguments['setlibrarypath'], arguments['template'], not arguments['clean'])
-        guided_init_iocs(initial_num, manager)
+            ioc_top, bin_top = prompt_for_top_dirs()
+            manager = IOCActionManager(ioc_top, bin_top, arguments['setlibrarypath'], arguments['template'], not arguments['minimal'], arguments['copy'])
+            guided_init_iocs( manager)
+
+    except KeyboardInterrupt:
+        initIOC_print('\n\nExiting...')
 
 
 if __name__ == '__main__':
