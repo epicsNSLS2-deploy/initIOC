@@ -104,7 +104,6 @@ existing_connection_parameter = {
     "ADAravis"      : "CAMERA_NAME",
     "ADVimba"       : "CAMERA_ID",
     "ADSpinnaker"   : "CAMERA_ID",
-
 }
 
 
@@ -210,12 +209,7 @@ class IOCActionManager:
                     driver_path = initIOC_path_join(driver_path, name)
                     break
 
-            # Find the dbd dile
-            dbd_path = initIOC_path_join(driver_path, "dbd")
-            for name in os.listdir(dbd_path):
-                if name.endswith(".dbd"):
-                    dbd_path = initIOC_path_join(dbd_path, name)
-                    break
+            ioc_top_path = driver_path
 
             # find the driver executable
             executable_path = initIOC_path_join(driver_path, "bin")
@@ -235,7 +229,8 @@ class IOCActionManager:
                 if dir.startswith('ioc') and dir.lower().endswith(action.basename):
                     iocBoot_path = initIOC_path_join(iocBoot_path, dir)
                     break
-            return executable_path, dbd_path.split('{}'.format(action.ioc_type))[1][1:], iocBoot_path
+            #return executable_path, dbd_path.split('{}'.format(action.ioc_type))[1][1:], iocBoot_path
+            return ioc_top_path, executable_path, iocBoot_path
         except:
             return None, None, None
 
@@ -445,7 +440,7 @@ class IOCActionManager:
             return module.upper()
 
 
-    def generate_env_paths(self, action):
+    def generate_env_paths(self, ioc_top_path, action):
 
         initIOC_print('Generating envPaths based on discovered compiled binaries...')
         ioc_path = initIOC_path_join(self.ioc_top, action.ioc_name)
@@ -457,7 +452,7 @@ class IOCActionManager:
 
         envPaths_fp.write('# Path propagated to remaining envPaths (binary bundle location)\nepicsEnvSet("BINARY_TOP", "{}")\n\n'.format(self.binary_location))
         envPaths_fp.write('epicsEnvSet("ARCH", "{}")\n'.format(arch))
-        envPaths_fp.write('epicsEnvSet("TOP", "${PWD}")\n')
+        envPaths_fp.write('epicsEnvSet("TOP", "{}")\n'.format(ioc_top_path))
 
         base_path = initIOC_path_join('$(BINARY_TOP)', 'base')
         envPaths_fp.write('epicsEnvSet("EPICS_BASE",{}"{}")\n'.format((' ' * 14), base_path))
@@ -495,7 +490,7 @@ class IOCActionManager:
         initIOC_print("-------------------------------------------")
 
         from_template = self.use_template
-        executable_path, dbd_path, iocBoot_path = self.find_paths_for_action(action)
+        ioc_top_path, executable_path, iocBoot_path = self.find_paths_for_action(action)
         
         if executable_path is None:
             initIOC_print('ERROR - Could not find binary for {}, skipping...'.format(action.ioc_type))
@@ -511,7 +506,7 @@ class IOCActionManager:
             return
 
         if not from_template:
-            self.create_ioc_from_bundle(action, executable_path, dbd_path, iocBoot_path)
+            self.create_ioc_from_bundle(action, ioc_top_path, executable_path, iocBoot_path)
         else:
             self.create_ioc_from_template(action, executable_path)
 
@@ -529,7 +524,7 @@ class IOCActionManager:
         config_fp.close()
 
 
-    def create_ioc_from_bundle(self, action, executable_path, dbd_path, iocBoot_path):
+    def create_ioc_from_bundle(self, action, ioc_top_path, executable_path, iocBoot_path):
 
         initIOC_print('Generating IOC from detected bundle located at: {}'.format(self.binary_location))
         time.sleep(0.3)
@@ -555,11 +550,11 @@ class IOCActionManager:
 
         self.genertate_st_cmd(action, executable_path, current_base, dbd_path=dbd_path)
         self.generate_unique_cmd(action)
-        self.generate_env_paths(action)
-        self.grab_dependencies_from_bundle(ioc_path, iocBoot_path, self.with_deps)
+        self.generate_env_paths(ioc_top_path, action)
+        self.grab_dependencies_from_bundle(ioc_path, iocBoot_path)
 
     
-    def grab_dependencies_from_bundle(self, ioc_path, iocBoot_path, with_optional_deps):
+    def grab_dependencies_from_bundle(self, ioc_path, iocBoot_path):
 
         initIOC_print('Collecting additional iocBoot files from bundle...')
         for file in os.listdir(iocBoot_path):
@@ -567,7 +562,7 @@ class IOCActionManager:
             if os.path.isfile(target):
                 if file == 'auto_settings.req':
                     shutil.copyfile(target, initIOC_path_join(ioc_path, file))
-                elif with_optional_deps and not file.startswith(('Makefile', 'st', 'test', 'READ', 'dll', 'envPaths')):
+                elif self.with_deps and not file.startswith(('Makefile', 'st', 'test', 'READ', 'dll', 'envPaths')):
                     shutil.copyfile(target, initIOC_path_join(ioc_path, file))
 
 
@@ -643,8 +638,7 @@ class IOCActionManager:
 
 
 class IOCAction:
-    """
-    Helper class that stores information and functions for each IOC in the CONFIGURE file
+    """Helper class that stores information and functions for each IOC in the CONFIGURE file
 
     Attributes
     ----------
@@ -680,7 +674,7 @@ class IOCAction:
     """
 
 
-    def __init__(self, ioc_type, ioc_name, ioc_prefix, asyn_port, ioc_port, connection, ioc_num):
+    def __init__(self, ioc_type, ioc_name, bl_prefix, ioc_prefix, asyn_port, ioc_port, connection):
         """Constructor for the IOCAction class
 
         Parameters
@@ -704,7 +698,6 @@ class IOCAction:
         self.epics_environment  = {}
         self.ioc_type           = ioc_type
         self.basename           = ioc_type[2:].lower()
-        self.ioc_num            = ioc_num
 
         # These epics environment variables are set by the user for each IOC
         self.user_entered_env = ['ENGINEER', 'PORT', 'IOC', 'CAM-CONNECT', 'PREFIX', 'CTPREFIX', 'HOSTNAME', 'IOCNAME']
@@ -721,17 +714,20 @@ class IOCAction:
         self.epics_environment['CAM-CONNECT'] = connection
         
         self.ioc_prefix         = ioc_prefix
-        self.epics_environment['PREFIX']    = "{}{{{}-Cam:{}}}".format(ioc_prefix, ioc_type[2:], ioc_num)
-        self.epics_environment['CTPREFIX']  = "{}{{{}-Cam:{}}}".format(ioc_prefix, ioc_type[2:], ioc_num)
+        self.epics_environment['PREFIX']    = '{}{}'.format(bl_prefix, ioc_prefix)
+        self.epics_environment['CTPREFIX']  = '{}{}'.format(bl_prefix, ioc_prefix)
         self.epics_environment['HOSTNAME']  = 'NA'
         
         self.ioc_port           = ioc_port
         self.ioc_name           = ioc_name
         self.epics_environment['IOCNAME'] = ioc_name
-        self.create_base_environment()
+        #self.create_base_environment()
 
 
     def create_base_environment(self):
+        """Initializes the Basic IOC environment
+        """
+
         self.epics_environment['QSIZE']     = 20
         self.epics_environment['NCHANS']    = 2048
         self.epics_environment['HIST_SIZE'] = 4096
@@ -760,8 +756,7 @@ class IOCAction:
 
 
 def parse_line_into_action(line, prefix, ioc_num_counter):
-    """
-    Function that parses a line in the CONFIGURE table into an IOCAction object
+    """Function that parses a line in the CONFIGURE table into an IOCAction object
 
     Parameters
     ----------
@@ -781,7 +776,7 @@ def parse_line_into_action(line, prefix, ioc_num_counter):
         line = re.sub('\t', ' ', line)
         line = re.sub(' +', ' ', line)
         temp = line.split(' ')
-        ioc_action = IOCAction(temp[0], temp[1], prefix, temp[2], temp[3], temp[4], ioc_num_counter)
+        ioc_action = IOCAction(temp[0], temp[1], bl_prefix, temp[2], temp[3], temp[4], temp[5])
         return ioc_action
     except IndexError:
         initIOC_print('IOC line could not be parsed, skipping...')
@@ -789,9 +784,10 @@ def parse_line_into_action(line, prefix, ioc_num_counter):
 
 
 def read_ioc_config(initial_ioc_number):
-    """
-    Function for reading the CONFIGURE file. Returns a dictionary of configure options,
-    a list of IOCAction instances, and a boolean representing if binaries are flat or not
+    """Function for reading the CONFIGURE file. 
+    
+    Returns a dictionary of configure options, a list of IOCAction instances, 
+    and a boolean representing if binaries are flat or not
 
     Returns
     -------
@@ -841,7 +837,8 @@ def read_ioc_config(initial_ioc_number):
 
 
 def print_start_message():
-    """ Function for printing initial message """
+    """Function for printing initial message
+    """
 
     initIOC_print("+----------------------------------------------------------------+")
     initIOC_print("+ initIOCs, Version: " + __version__ +"                                      +")
@@ -853,7 +850,8 @@ def print_start_message():
 
 
 def print_supported_drivers():
-    """ Function that prints list of supported drivers """
+    """Function that prints list of supported drivers
+    """
 
     initIOC_print('Supported Drivers:')
     initIOC_print("+-----------------------------+")
@@ -863,6 +861,14 @@ def print_supported_drivers():
 
 
 def prompt_for_top_dirs(with_welcome=True):
+    """Function that asks user for target IOC and binary locations.
+
+    Parameters
+    ----------
+    with_welcome : bool
+        If true, print welcome message
+    """
+
     ioc_top = ''
     binaries_top = ''
     if with_welcome:
@@ -897,10 +903,10 @@ def enter_config_info():
     configuration = {}
     configuration['IOC_DIR'] = ioc_top
     configuration['TOP_BINARY_DIR'] = bin_top
-    configuration['PREFIX']          = input('Enter the IOC Prefix (without the camera specific portion ex. XF:10IDC-BI). > ')
+    configuration['PREFIX']          = input('Enter the Beamline Prefix (without the camera specific portion ex. XF:10IDC-BI). > ')
     configuration['HOSTNAME']        = input('Enter the IOC server hostname. > ')
     configuration['ENGINEER']        = input('Enter your name and contact information. > ')
-    configuration['CA_ADDRESS']   = input('Enter the Channel Address subnet IP. > ')
+    configuration['CA_ADDRESS']      = input('Enter the Channel Address subnet IP. > ')
     write_config(configuration)
 
 
@@ -918,12 +924,11 @@ def write_config(configuration):
     file.close()
 
 
-def guided_init_iocs(initial_ioc_num, manager):
-    """ Function that guides the user through generating a single IOC through the CLI """
-
-    ioc_num = initial_ioc_num
+def guided_init_iocs(manager):
+    """Function that guides the user through generating a single IOC through the CLI
+    """
     
-    prefix          = input('Enter the IOC Prefix (without the camera specific portion ex. XF:10IDC-BI). > ')
+    bl_prefix       = input('Enter the IOC Prefix (without the camera specific portion ex. XF:10IDC-BI). > ')
     hostname        = input('Enter the IOC server hostname. > ')
     engineer        = input('Enter your name and contact information. > ')
     ca_address_ip   = input('Enter the Channel Address subnet IP. > ')
@@ -942,10 +947,11 @@ def guided_init_iocs(initial_ioc_num, manager):
                 initIOC_print('Could not find driver {} in {}.'.format(driver_type, os.path.join(manager.areaDetector_path, driver_type)))
                 driver_type = None
         ioc_name = input('What should the IOC name be? > ')
+        dev_prefix = input('Please enter the device specific portion of the PV prefix (ex. {{BlackFly-Cam:1}}) > ')
         asyn_port = input('What asyn port should the IOC use? (ex. PS1). > ')
-        ioc_port = input('What telnet port should procServer use to run the IOC? > ')
-        connection = input('Enter the connection param for your device. (ex. IP, serial number etc.) enter NA if not sure. > ')
-        ioc_action = IOCAction(driver_type, ioc_name, prefix, asyn_port, ioc_port, connection, ioc_num)
+        ioc_port = input('What telnet port should procServer use to run the IOC? (ex. 4000) > ')
+        connection = input('Enter the connection parameter for your device. (ex. IP, serial number etc.) Enter NA if not sure. > ')
+        ioc_action = IOCAction(driver_type, ioc_name, bl_prefix, dev_prefix, asyn_port, ioc_port, connection)
         ioc_action.epics_environment['HOSTNAME'] = hostname
         ioc_action.epics_environment['ENGINEER'] = engineer
         ioc_action.epics_environment['EPICS_CA_ADDR_LIST'] = ca_address_ip
@@ -953,14 +959,21 @@ def guided_init_iocs(initial_ioc_num, manager):
         another = input('Would you like to generate another IOC? (y/n). > ')
         if another != 'y':
             another_ioc = False
-            ioc_num = ioc_num + 1
     initIOC_print('Exiting...')
 
 
-def init_iocs_cli(initial_ioc_number, actions, manager):
-    """
-    Main driver function. First calls read_ioc_config, then for each instance of IOCAction
+def init_iocs_cli(actions, manager):
+    """Main initIOCs driver function. 
+    
+    First calls read_ioc_config, then for each instance of IOCAction
     perform the process, update_unique, update_config, fix_env_paths, and cleanup functions
+
+    Parameters
+    ----------
+    actions : list of IOCAction
+        list of IOC actions to perform
+    manager : IOCActionManger
+        Manager object for executing IOC actions
     """
 
     if len(actions) == 0:
@@ -971,14 +984,18 @@ def init_iocs_cli(initial_ioc_number, actions, manager):
             print_supported_drivers()
             initIOC_print('To request support for {} to be added to initIOC, please create an issue on:'.format(action.ioc_type))
             initIOC_print('https://github.com/epicsNSLS2-deploy/initIOC/issues\n')
-            initIOC_print('Alternatively, you may try using the non-templated version.')
+            initIOC_print('Alternatively, you may try using the non-templated version. (Run without "-t" flag)')
         else:
             manager.process_action(action)
 
 
 def initIOC_print(text):
-    """
-    A wrapper function for 'print' that allows for printing to CLI or to log
+    """A wrapper function for 'print' that allows for printing to CLI or to log
+
+    Parameters
+    ----------
+    text : str
+        Text to print to console of log
     """
 
     if USING_GUI and GUI_TOP_WINDOW is not None:
@@ -992,7 +1009,7 @@ def initIOC_print(text):
 #-------------------------------------------------
 
 
-class ToolTip(object):
+class ToolTip:
     """
     Class for handling tool tips in the initIOC GUI.
 
@@ -1011,7 +1028,8 @@ class ToolTip(object):
     # Written by Michael Posada
 
     def __init__(self, widget):
-        """ Constructor for ToolTip class """
+        """Constructor for ToolTip class
+        """
 
         self.widget = widget
         self.tipwindow = None
@@ -1020,7 +1038,8 @@ class ToolTip(object):
         self.y = 0
 
     def showtip(self, text):
-        """ Function that actually displays the tooltip """
+        """Function that actually displays the tooltip
+        """
 
         self.text = text
         if self.tipwindow or not self.text:
@@ -1036,8 +1055,10 @@ class ToolTip(object):
                       font=("tahoma", "8", "normal"))
         label.pack(ipadx=1)
 
+
     def hidetip(self):
-        """ Function that destroys the tooltip """
+        """Function that destroys the tooltip
+        """
 
         tw = self.tipwindow
         self.tipwindow = None
@@ -1046,8 +1067,7 @@ class ToolTip(object):
 
 
 def CreateToolTip(widget, text):
-    """
-    Function that binds the tooltip to a widget
+    """Function that binds the tooltip to a widget
 
     Parameters
     ----------
@@ -1067,8 +1087,7 @@ def CreateToolTip(widget, text):
 
 
 class InitIOCGui:
-    """
-    Class representing the main GUI for initIOCs.
+    """Class representing the main GUI for initIOCs.
 
     Attributes
     ----------
@@ -1097,11 +1116,10 @@ class InitIOCGui:
         opens window to add new IOC
     """
 
-    def __init__(self, master, initial_ioc_number, configuration, actions, manager):
+    def __init__(self, master, configuration, actions, manager):
         """ Constructor for InitIOCGui """
 
         self.master = master
-        self.initial_ioc_number = initial_ioc_number
         self.configuration = configuration
         self.manager = manager
 
@@ -1118,7 +1136,6 @@ class InitIOCGui:
         self.askAnother = BooleanVar()
         self.askAnother.set(False)
 
-        self.ioc_num_counter = 0
         self.executionThread = threading.Thread()
 
         menubar = Menu(self.master)
@@ -1146,7 +1163,7 @@ class InitIOCGui:
         helpmenu.add_command(label='initIOC on Github', command = lambda: webbrowser.open('https://github.com/epicsNSLS2-deploy/initIOC', new=2))
         helpmenu.add_command(label='Report an Issue',   command = lambda: webbrowser.open('https://github.com/epicsNSLS2-deploy/initIOC/issues', new=2))
         helpmenu.add_command(label='Supported Drivers', command=print_supported_drivers)
-        helpmenu.add_command(label = 'About',           command=print_start_message)
+        helpmenu.add_command(label='About',             command=print_start_message)
         menubar.add_cascade(label='Help', menu=helpmenu)
 
         self.master.config(menu=menubar)
@@ -1194,18 +1211,19 @@ class InitIOCGui:
         """ Function that resets the IOC panel """
 
         self.iocPanel.delete('1.0', END)
-        self.iocPanel.insert(INSERT, '# IOC Type        IOC Name     Asyn Port      IOC Port      Cam Connection\n')
-        self.iocPanel.insert(INSERT, '#-------------------------------------------------------------------------\n')
+        self.iocPanel.insert(INSERT, '# IOC Type        IOC Name    Device Prefix   Asyn Port      IOC Port      Cam Connection\n')
+        self.iocPanel.insert(INSERT, '#-----------------------------------------------------------------------------------------\n')
 
 
-    def writeToIOCPanel(self, ioc_type, name, asyn, port, connect):
+    def writeToIOCPanel(self, ioc_type, name, dev_prefix, asyn, port, connect):
         """ Function that writes to the iocPanel """
 
-        self.iocPanel.insert(INSERT, '{:<18}{:<15}{:<15}{:<12}{}\n'.format(ioc_type, name, asyn, port, connect))
+        self.iocPanel.insert(INSERT, '{:<18}{:<15}{:<15}{:<15}{:<12}{}\n'.format(ioc_type, name, dev_prefix, asyn, port, connect))
 
 
     def writeToLog(self, text):
-        """ Function that writes text to the GUI log """
+        """Function that writes text to the GUI log
+        """
 
         self.logPanel.insert(INSERT, text)
         self.logPanel.see(END)
@@ -1233,7 +1251,8 @@ class InitIOCGui:
 
 
     def read_gui_config(self):
-        """ Function that reads values entered into gui into actions, configuration, and bin_flat """
+        """Function that reads values entered into gui into actions, configuration, and bin_flat 
+        """
 
         for elem in self.text_inputs.keys():
             if self.text_inputs[elem].get() != self.configuration[elem]:
@@ -1249,7 +1268,7 @@ class InitIOCGui:
         del self.actions[:]
         for line in self.iocPanel.get('1.0', END).splitlines():
             if not line.startswith('#') and len(line) > 1:
-                action = parse_line_into_action(line, self.configuration['PREFIX'], self.ioc_num_counter + self.initial_ioc_number)
+                action = parse_line_into_action(line, self.configuration['PREFIX'])
                 action.epics_environment['HOSTNAME'] = self.configuration['HOSTNAME']
                 action.epics_environment['ENGINEER'] = self.configuration['ENGINEER']
                 action.epics_environment['EPICS_CA_ADDR_LIST'] = self.configuration['CA_ADDRESS']
@@ -1261,7 +1280,8 @@ class InitIOCGui:
 
 
     def execute(self):
-        """ Reads gui info, and runs init_iocs """
+        """Reads gui info, and runs init_iocs
+        """
 
         if self.executionThread.is_alive():
             self.showError('Process thread is already active!')
@@ -1272,7 +1292,8 @@ class InitIOCGui:
 
 
     def save(self):
-        """ Saves the current IOC configuration """
+        """Saves the current IOC configuration
+        """
 
         self.read_gui_config()
         if os.path.exists('CONFIGURE'):
@@ -1288,7 +1309,8 @@ class InitIOCGui:
 
 
     def saveLog(self):
-        """ Function that saves the current log into a log file """
+        """Function that saves the current log into a log file
+        """
 
         if not os.path.exists('logs'):
             os.mkdir('logs')
@@ -1302,14 +1324,16 @@ class InitIOCGui:
 
 
     def clearLog(self):
-        """ Reinitializes the log """
+        """Reinitializes the log
+        """
 
         self.logPanel.delete('1.0', END)
         print_start_message()
 
 
     def openAddIOCWindow(self):
-        """ Opens an addIOC window """
+        """Opens an addIOC window
+        """
 
         AddIOCWindow(self)
 
@@ -1321,8 +1345,7 @@ class InitIOCGui:
 
 
 class AddIOCWindow:
-    """
-    Class representing a window for adding a new IOC into the config
+    """Class representing a window for adding a new IOC into the config
     """
 
     def __init__(self, root):
@@ -1336,6 +1359,7 @@ class AddIOCWindow:
         self.ioc_type_var.set(supported_drivers[0])
 
         self.ioc_name_var       = StringVar()
+        self.dev_prefix_var     = StringVar()
         self.asyn_port_var      = StringVar()
         self.ioc_port_var       = StringVar()
         self.cam_connect_var    = StringVar()
@@ -1350,6 +1374,11 @@ class AddIOCWindow:
         ioc_name_entry      = Entry(self.master, textvariable=self.ioc_name_var)
         ioc_name_entry.grid(row = 1, column = 1, columnspan=2, padx = 10, pady = 10)
         CreateToolTip(ioc_name_entry, 'The name of the IOC. Usually cam-$NAME')
+
+        dev_prefix_label      = Label(self.master, text="Device Prefix").grid(row = 1, column = 0, padx = 10, pady = 10)
+        dev_prefix_entry      = Entry(self.master, textvariable=self.dev_prefix_var)
+        dev_prefix_entry.grid(row = 1, column = 1, columnspan=2, padx = 10, pady = 10)
+        CreateToolTip(dev_prefix_entry, 'The device-specific prefix. ex. {{Sim-Cam:1}}')
 
         asyn_port_label     = Label(self.master, text="Asyn Port").grid(row = 2, column = 0, padx = 10, pady = 10)
         asyn_port_entry     = Entry(self.master, textvariable=self.asyn_port_var)
@@ -1371,7 +1400,8 @@ class AddIOCWindow:
 
 
     def submit(self):
-        """ Function that enters the filled IOC values into the configuration """
+        """Function that enters the filled IOC values into the configuration
+        """
 
         if self.ioc_type_var.get() not in supported_drivers:
             self.root.showError('The selected IOC type is not supported.')
@@ -1380,14 +1410,15 @@ class AddIOCWindow:
 
         ioc_type = self.ioc_type_var.get()
         name = self.ioc_name_var.get()
+        dev_prefix = self.dev_prefix_var.get()
         asyn = self.asyn_port_var.get()
         port = self.ioc_port_var.get()
         connect = self.cam_connect_var.get()
-        if ioc_type == '' or name == '' or asyn == '' or port == '' or connect == '':
+        if ioc_type == '' or name == '' or dev_prefix == '' or asyn == '' or port == '' or connect == '':
             self.root.showError('Please enter a valid value for all of the fields.')
             return
 
-        self.root.writeToIOCPanel(ioc_type, name, asyn, port, connect)
+        self.root.writeToIOCPanel(ioc_type, name, dev_prefix, asyn, port, connect)
         self.root.writeToLog('Added IOC {} to configuration.\n'.format(name))
 
         if self.root.askAnother.get():
