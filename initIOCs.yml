@@ -1,0 +1,13 @@
+ioc_dir: /epics/iocs
+bundle_location: /epics/src
+beamline_prefix: XF17BM-BI
+engineer: J. Wlodek
+hostname: localhost
+ca_address_ip: 127.0.0.255
+iocs:
+  - name: cam-sim1
+    type: ADSimDetector
+    device_prefix: "{Sim-Cam:1}"
+    asyn_port: SIM1
+    telnet_port: 4000
+    connection: NA
