@@ -765,7 +765,7 @@ def prompt_for_top_dirs(with_welcome=True):
     
     valid = False
     while not valid:
-        binaries_top = input('\nEnter the location of your compiled binaries.\n> ')
+        binaries_top = input('\nEnter the location of your compiled binaries. (/ad-nfs/epics/production...)\n> ')
         if not os.path.exists(binaries_top):
             initIOC_print('\nThe selected top binary directory does not exist, please try again.\n')
         else:
@@ -844,7 +844,7 @@ def guided_init_iocs(manager):
             if os.path.exists(ioc_gen_config_path):
                 os.remove(ioc_gen_config_path)
             with open(ioc_gen_config_path, 'w') as config:
-                yaml.safe_dump(config, initIOCs_config)
+                yaml.safe_dump(initIOCs_config, config)
         except PermissionError:
             initIOC_print('Could not save config, insufficient permissions.')
 
