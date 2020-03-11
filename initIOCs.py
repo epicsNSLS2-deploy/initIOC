@@ -196,7 +196,7 @@ class IOCActionManager:
 
             # find the driver executable
             executable_path = initIOC_path_join(driver_path, "bin")
-            # There should only be one architecture
+            # There should only be one architecture in the bundle
             for name in os.listdir(executable_path):
                 executable_path = initIOC_path_join(executable_path, name)
                 break
@@ -209,7 +209,7 @@ class IOCActionManager:
 
             iocBoot_path = initIOC_path_join(driver_path, 'iocBoot')
             for dir in os.listdir(iocBoot_path):
-                if dir.startswith('ioc') and dir.lower().endswith(ioc_type[2:].lower()):
+                if dir.startswith('ioc') and os.path.isdir(initIOC_path_join(iocBoot_path, dir)):
                     iocBoot_path = initIOC_path_join(iocBoot_path, dir)
                     break
             return os.path.abspath(ioc_top_path), os.path.abspath(executable_path), os.path.abspath(iocBoot_path)
