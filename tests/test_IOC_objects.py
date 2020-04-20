@@ -9,7 +9,7 @@ import tests.helper_functions as HELPER
 
 def test_update_mod_paths():
     os.chdir('tests')
-    manager_flat_temp = initIOCs.IOCActionManager('./testiocs', './test_bundle_standard', False, False, False)
+    manager_flat_temp = initIOCs.IOCActionManager('./testiocs', './test_bundle_standard', False, False, False, True)
     assert manager_flat_temp.base_path == './test_bundle_standard/base'
     assert manager_flat_temp.support_path == './test_bundle_standard/support'
     assert manager_flat_temp.areaDetector_path == './test_bundle_standard/support/areaDetector'    
@@ -23,7 +23,7 @@ def test_update_mod_paths():
 
 def test_get_lib_path_for_module():
     os.chdir('tests')
-    manager = initIOCs.IOCActionManager('./testiocs', './test_bundle_standard', False, False, False)
+    manager = initIOCs.IOCActionManager('./testiocs', './test_bundle_standard', False, False, False, True)
     path = manager.get_lib_path_for_module(initIOCs.initIOC_path_join(manager.binary_location, 'support/testModule'), 'linux-x86_64', ':')
     assert path == './test_bundle_standard/support/testModule/bin/linux-x86_64:./test_bundle_standard/support/testModule/lib/linux-x86_64:'
     os.chdir('..')
@@ -34,8 +34,8 @@ def test_get_lib_path_str():
         pass
     else:
         os.chdir('tests')
-        manager = initIOCs.IOCActionManager('./testiocs', './test_bundle_standard', False, False, False)
-        action = initIOCs.IOCAction('ADSimDetector', '', '', '', '', '', '')
+        manager = initIOCs.IOCActionManager('./testiocs', './test_bundle_standard', False, False, False, True)
+        action = initIOCs.IOCAction('ADSimDetector', '', '', 'sim1:', '', '', '', '')
         lib_path = manager.get_lib_path_str(action)
         print(lib_path)
         assert lib_path == 'export LD_LIBRARY_PATH=./test_bundle_standard/base/bin/linux-x86_64:./test_bundle_standard/base/lib/linux-x86_64:./test_bundle_standard/support/testModule/bin/linux-x86_64:./test_bundle_standard/support/testModule/lib/linux-x86_64:./test_bundle_standard/support/areaDetector/ADSupport/bin/linux-x86_64:./test_bundle_standard/support/areaDetector/ADSupport/lib/linux-x86_64:./test_bundle_standard/support/areaDetector/ADCore/bin/linux-x86_64:./test_bundle_standard/support/areaDetector/ADCore/lib/linux-x86_64:./test_bundle_standard/support/areaDetector/ADSimDetector/bin/linux-x86_64:./test_bundle_standard/support/areaDetector/ADSimDetector/lib/linux-x86_64:$LD_LIBRARY_PATH'
@@ -43,7 +43,7 @@ def test_get_lib_path_str():
 
 
 def test_get_env_paths_name():
-    manager = initIOCs.IOCActionManager('./testiocs', './test_bundle_standard', False, False, False)
+    manager = initIOCs.IOCActionManager('./testiocs', './test_bundle_standard', False, False, False, True)
     assert manager.get_env_paths_name('seq') == 'SNCSEQ'
     assert manager.get_env_paths_name('iocStats') == 'DEVIOCSTATS'
     assert manager.get_env_paths_name('areaDetector') == 'AREA_DETECTOR'
@@ -59,8 +59,8 @@ def test_add_to_environment():
 
 def test_create_config_file():
     os.chdir('tests')
-    manager = initIOCs.IOCActionManager('./testiocs', './test_bundle_standard', False, False, False)
-    action = initIOCs.IOCAction('ADSimDetector', 'test-sim1', '', '', '4040', '', '')
+    manager = initIOCs.IOCActionManager('./testiocs', './test_bundle_standard', False, False, False, True)
+    action = initIOCs.IOCAction('ADSimDetector', 'test-sim1', '', 'sim1:', '', '4040', '', '')
     action.epics_environment['HOSTNAME'] = 'localhost'
     manager.initialize_ioc_directory()
     os.mkdir('testiocs/test-sim1')
@@ -77,8 +77,8 @@ def test_create_config_file():
 def test_generate_env_paths():
     os.chdir('tests')
     pwd = os.getcwd()
-    manager = initIOCs.IOCActionManager('./testiocs', './test_bundle_standard', False, False, False)
-    action = initIOCs.IOCAction('ADSimDetector', 'test-sim1', '', '', '4040', '', '')
+    manager = initIOCs.IOCActionManager('./testiocs', './test_bundle_standard', False, False, False, True)
+    action = initIOCs.IOCAction('ADSimDetector', 'test-sim1', '', 'sim1:', '', '4040', '', '')
     manager.initialize_ioc_directory()
     os.mkdir('testiocs/test-sim1')
     manager.generate_env_paths(action)
@@ -92,8 +92,8 @@ def test_generate_env_paths():
 
 
 def test_grab_additionl_env():
-    manager = initIOCs.IOCActionManager('./testiocs', './test_bundle_standard', False, False, False)
-    action = initIOCs.IOCAction('ADSimDetector', 'test-sim1', '', '', '4040', '', '')
+    manager = initIOCs.IOCActionManager('./testiocs', './test_bundle_standard', False, False, False, True)
+    action = initIOCs.IOCAction('ADSimDetector', 'test-sim1', '', 'sim1:', '', '4040', '', '')
     st_base_path = 'tests/test_bundle_standard/support/areaDetector/ADSimDetector/iocs/simDetectorIOC/iocBoot/iocSimDetector/Makefile'
     manager.grab_additional_env(action, st_base_path)
     assert action.epics_environment['MAX_THREADS'] == '8'
@@ -103,8 +103,8 @@ def test_grab_additionl_env():
 def test_generate_unique_cmd():
     os.chdir('tests')
     pwd = os.getcwd()
-    manager = initIOCs.IOCActionManager('./testiocs', initIOCs.initIOC_path_join(pwd, 'test_bundle_standard'), False, False, False)
-    action = initIOCs.IOCAction('ADSimDetector', 'test-sim1', 'TEST1:', 'TS1', '4040', 'NA', 3)
+    manager = initIOCs.IOCActionManager('./testiocs', initIOCs.initIOC_path_join(pwd, 'test_bundle_standard'), False, False, False, True)
+    action = initIOCs.IOCAction('ADSimDetector', 'test-sim1', 'TEST1:', 'sim1:', 'TS1', '4040', 'NA', 3)
     action.epics_environment['HOSTNAME'] = 'localhost'
     action.epics_environment['EPICS_CA_ADDR_LIST'] = '127.0.0.255'
     action.epics_environment['ENGINEER'] = 'J. Wlodek'
@@ -125,8 +125,8 @@ def test_generate_unique_cmd():
 def test_generate_st_cmd():
     os.chdir('tests')
     pwd = os.getcwd()
-    manager = initIOCs.IOCActionManager('./testiocs', './test_bundle_standard', False, False, False)
-    action = initIOCs.IOCAction('ADSimDetector', 'test-sim1', 'TEST1:', 'TS1', '4040', 'NA', 3)
+    manager = initIOCs.IOCActionManager('./testiocs', './test_bundle_standard', False, False, False, True)
+    action = initIOCs.IOCAction('ADSimDetector', 'test-sim1', 'TEST1:', 'sim1:', 'TS1', '4040', 'NA', 3)
     action.epics_environment['HOSTNAME'] = 'localhost'
     action.epics_environment['EPICS_CA_ADDR_LIST'] = '127.0.0.255'
     action.epics_environment['ENGINEER'] = 'J. Wlodek'

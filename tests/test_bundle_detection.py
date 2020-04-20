@@ -3,8 +3,8 @@ import os
 import initIOCs
 
 
-manager_flat = initIOCs.IOCActionManager('tests/testiocs', 'tests/test_bundle_flat', False, False, False)
-manager_standard = initIOCs.IOCActionManager('tests/testiocs', 'tests/test_bundle_standard', False, False, False)
+manager_flat = initIOCs.IOCActionManager('tests/testiocs', 'tests/test_bundle_flat', False, False, False, True)
+manager_standard = initIOCs.IOCActionManager('tests/testiocs', 'tests/test_bundle_standard', False, False, False, True)
 
 
 def test_detect_flat_bundle():

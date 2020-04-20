@@ -35,6 +35,6 @@ CA_ADDRESS=127.0.0.255
 # Cam Connection is a universal variable that is used to connect to the camera.
 # UVC - Serial or ProductID, Prosilica - IP, etc.
 
-# IOC Type    IOC Name        Asyn Port      IOC Port      Cam Connection
-#-------------------------------------------------------------------------
-ADSimDetector  cam-sim1         SIM1           4000              NA
+# IOC Type    IOC Name       Device PV    Asyn Port      IOC Port      Cam Connection
+#----------------------------------------------------------------------------------
+ADSimDetector  cam-sim1     {Sim-Cam:1}     SIM1           4000              NA

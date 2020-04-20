@@ -20,6 +20,6 @@ HOSTNAME=localhost
 # Channel access address list IP
 CA_ADDRESS=127.0.0.255
 
-# IOC Type        IOC Name     Asyn Port      IOC Port      Cam Connection
-#-------------------------------------------------------------------------
-ADSimDetector      test-sim1    TS1           4040          NA
+# IOC Type        IOC Name     Device Prefix  Asyn Port      IOC Port      Cam Connection
+#-----------------------------------------------------------------------------------------
+ADSimDetector      test-sim1      TEMP1          TS1           4040          NA
