@@ -86,8 +86,8 @@ existing_connection_parameter = {
 
 # On windows default to C directory
 if platform == 'win32':
-    base_configuration['IOC_DIR'] = 'C:' + base_configuration['IOC_DIR']
-    base_configuration['TOP_BINARY_DIR'] = 'C:' + base_configuration['TOP_BINARY_DIR']
+    base_configuration['ioc_dir'] = 'C:' + base_configuration['ioc_dir']
+    base_configuration['bundle_location'] = 'C:' + base_configuration['bundle_location']
 
 
 # External areaDetector plugins
