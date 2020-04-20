@@ -212,7 +212,7 @@ class IOCActionManager:
                 if dir.startswith('ioc') and os.path.isdir(initIOC_path_join(iocBoot_path, dir)):
                     iocBoot_path = initIOC_path_join(iocBoot_path, dir)
                     break
-            return os.path.abspath(ioc_top_path), os.path.abspath(executable_path), os.path.abspath(iocBoot_path)
+            return ioc_top_path, executable_path, iocBoot_path
         except:
             return None, None, None
 
@@ -753,7 +753,7 @@ def prompt_for_top_dirs(with_welcome=True):
         initIOC_print('Welcome to initIOC!')
     valid = False
     while not valid:
-        ioc_top        = input('Enter the ioc output location.\n> ')
+        ioc_top        = input('Enter the absolute ioc output location (/epics/iocs).\nUse "/" characters for delimeters.\n> ')
         if not os.path.exists(os.path.dirname(ioc_top)):
             initIOC_print('\nThe selected ioc output directory does not exist, please try again.\n')
         elif os.path.isdir(ioc_top) and not os.access(ioc_top, os.W_OK):
@@ -765,7 +765,7 @@ def prompt_for_top_dirs(with_welcome=True):
     
     valid = False
     while not valid:
-        binaries_top = input('\nEnter the location of your compiled binaries. (/ad-nfs/epics/production...)\n> ')
+        binaries_top = input('\nEnter the absolute location of your compiled binaries (/ad-nfs/epics/production...).\nUse "/" characters for delimeters.\n> ')
         if not os.path.exists(binaries_top):
             initIOC_print('\nThe selected top binary directory does not exist, please try again.\n')
         else:
@@ -776,7 +776,7 @@ def prompt_for_top_dirs(with_welcome=True):
                 initIOC_print('')
                 valid = True
 
-    return ioc_top, os.path.abspath(binaries_top)
+    return ioc_top, binaries_top
 
 
 def guided_init_iocs(manager):
