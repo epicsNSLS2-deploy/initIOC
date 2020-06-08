@@ -1,5 +1,5 @@
-ioc_dir: /epics/iocs
-bundle_location: /epics/src
+ioc_dir: .
+bundle_location: /home/jwlodek/Workspace/demo
 beamline_prefix: XF17BM-BI
 engineer: J. Wlodek
 hostname: localhost

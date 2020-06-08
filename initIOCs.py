@@ -209,7 +209,7 @@ class IOCActionManager:
 
             iocBoot_path = initIOC_path_join(driver_path, 'iocBoot')
             for dir in os.listdir(iocBoot_path):
-                if dir.startswith('ioc') and os.path.isdir(initIOC_path_join(iocBoot_path, dir)):
+                if dir.startswith('ioc') and os.path.isdir(initIOC_path_join(iocBoot_path, dir)) and not dir.endswith('Test'):
                     iocBoot_path = initIOC_path_join(iocBoot_path, dir)
                     break
             return ioc_top_path, executable_path, iocBoot_path
