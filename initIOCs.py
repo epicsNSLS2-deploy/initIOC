@@ -17,7 +17,11 @@ import subprocess
 import argparse
 import datetime
 import sys
-import yaml
+WITH_YAML=True
+try:
+    import yaml
+except ImportError:
+    WITH_YAML=False
 from sys import platform
 
 # variables used to allow for printing text to GUI or stdout depending on usage
@@ -843,8 +847,10 @@ def guided_init_iocs(manager):
             ioc_gen_config_path = os.path.join(manager.ioc_top, ioc_action.ioc_name, 'initIOCs.yml')
             if os.path.exists(ioc_gen_config_path):
                 os.remove(ioc_gen_config_path)
-            with open(ioc_gen_config_path, 'w') as config:
-                yaml.safe_dump(initIOCs_config, config)
+            global WITH_YAML
+            if WITH_YAML:
+                with open(ioc_gen_config_path, 'w') as config:
+                    yaml.safe_dump(initIOCs_config, config)
         except PermissionError:
             initIOC_print('Could not save config, insufficient permissions.')
 
@@ -960,9 +966,13 @@ def main():
         
             print_start_message()
             init_iocs_cli(actions, manager)
-            for action in actions:
-                with open(os.path.join(manager.ioc_top, action.ioc_name, 'initIOCs.yml'), 'w') as config_file:
-                    yaml.safe_dump(configuration, config_file)
+            global WITH_YAML
+            if WITH_YAML:
+                for action in actions:
+                    with open(os.path.join(manager.ioc_top, action.ioc_name, 'initIOCs.yml'), 'w') as config_file:
+                        yaml.safe_dump(configuration, config_file)
+            else:
+                initIOC_print('Python yaml library not installed!')
         else:
             ioc_top, bin_top = prompt_for_top_dirs()
             manager = IOCActionManager(ioc_top, bin_top, arguments['setlibrarypath'], arguments['template'], not arguments['minimal'], arguments['links'])
