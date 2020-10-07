@@ -711,10 +711,15 @@ class IOCAction:
 
 
 def read_ioc_config(config_path):
-    with open(config_path, 'r') as configure:
-        config = yaml.full_load(configure)
+    global WITH_YAML
+    if WITH_YAML:
+        with open(config_path, 'r') as configure:
+            config = yaml.full_load(configure)
 
-    return config
+        return config
+    else:
+        initIOC_print('Error Python yaml library not installed!')
+        exit(-1)
 
 
 def print_start_message():
